@@ -83,6 +83,43 @@ export type SpotCategory = 'primary_hot' | 'structure_ledge' | 'shore_cove';
 
 export type MapStyleMode = 'satellite' | 'terrain' | 'plain';
 
+export type ArtifactSpotColor = 'red' | 'blue' | 'orange';
+
+export interface GridArtifactSpot {
+  rank: number; // 1..6
+  color: ArtifactSpotColor; // red (1-2), blue (3-4), orange (5-6)
+  cell_id: string; // Primary cell e.g. "F6"
+  grid_cells_label: string; // e.g. "Grid E6 / F6"
+  badge?: string; // e.g. "🏆 (The #1 Trophy Point)"
+  title: string; // e.g. "Tip of the Dehesa de Cortes Peninsula"
+  x_percent: number; // 0..100 horizontal position on screenshot
+  y_percent: number; // 0..100 vertical position on screenshot
+  why_label: string; // e.g. "Why it's #1:"
+  why_this_spot: string;
+  secondary_label?: string; // e.g. "The Terrain:" or "Why fish love it:"
+  secondary_text?: string;
+  how_to_fish?: string;
+}
+
+export interface WaterBodyArtifactAnalysis {
+  water_body_name: string;
+  region_label: string;
+  water_body_summary: string;
+  recommended_spots: GridArtifactSpot[];
+  best_game_plan: string[];
+}
+
+export interface UserScreenshotArtifact {
+  id: string;
+  createdAt: string;
+  bbox: BoundingBox;
+  mapStyle: MapStyleMode;
+  anglerGearNote?: string;
+  rawScreenshotDataUrl: string;
+  annotatedScreenshotDataUrl: string;
+  analysis: WaterBodyArtifactAnalysis;
+}
+
 export interface RecommendedSpot {
   id?: string;
   rank: number;

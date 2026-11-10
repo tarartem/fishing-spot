@@ -3,101 +3,80 @@
   "title": "SpotRecommendationResponse",
   "type": "object",
   "required": [
+    "water_body_name",
+    "region_label",
     "water_body_summary",
-    "restriction_overview",
-    "recommended_spots"
+    "recommended_spots",
+    "best_game_plan"
   ],
   "properties": {
+    "water_body_name": {
+      "type": "string",
+      "description": "Recognized name of the water body."
+    },
+    "region_label": {
+      "type": "string",
+      "description": "Region and country of the water body."
+    },
     "water_body_summary": {
       "type": "string",
-      "description": "Brief overview of the water body characteristics for the chosen fishing style and target species."
-    },
-    "restriction_overview": {
-      "type": "object",
-      "required": ["overall_status", "warnings", "disclaimer"],
-      "properties": {
-        "overall_status": {
-          "type": "string",
-          "enum": ["allowed", "permit_required", "seasonal_restriction", "prohibited", "unknown"]
-        },
-        "warnings": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Specific restricted grid cells or local rules the angler must respect."
-        },
-        "disclaimer": {
-          "type": "string",
-          "description": "Reminder to verify local fishing permits and seasonal regulations."
-        }
-      }
+      "description": "Brief overview of the water body and target species."
     },
     "recommended_spots": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 6,
       "maxItems": 6,
       "items": {
         "type": "object",
         "required": [
           "rank",
+          "color",
           "cell_id",
-          "coordinates",
+          "grid_cells_label",
           "title",
-          "confidence_score",
+          "x_percent",
+          "y_percent",
+          "why_label",
           "why_this_spot",
-          "tactical_advice",
-          "target_species_fit",
-          "restriction_status"
+          "how_to_fish"
         ],
         "properties": {
-          "rank": { "type": "integer", "minimum": 1 },
+          "rank": { "type": "integer", "minimum": 1, "maximum": 6 },
+          "color": { "type": "string", "enum": ["red", "blue", "orange"] },
           "cell_id": {
             "type": "string",
-            "pattern": "^[A-Z][0-9]{1,2}$",
-            "description": "Grid cell identifier, e.g. C4"
+            "pattern": "^[A-H][1-8]$"
           },
-          "coordinates": {
-            "type": "object",
-            "required": ["latitude", "longitude"],
-            "properties": {
-              "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
-              "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
-            }
-          },
-          "title": {
+          "grid_cells_label": {
             "type": "string",
-            "description": "Short descriptive title for the spot on the map."
+            "description": "e.g. 'Grid E6 / F6' or 'Grid E4'"
           },
-          "confidence_score": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 100
-          },
-          "why_this_spot": {
+          "badge": {
             "type": "string",
-            "description": "Detailed explanation of why fish hold in this grid cell based on structure, depth, or shoreline features."
+            "description": "Optional trophy badge for top spots, e.g. '🏆 (The #1 Trophy Point)'"
           },
-          "tactical_advice": {
-            "type": "object",
-            "required": ["recommended_baits_or_lures", "presentation_tips", "best_time_of_day"],
-            "properties": {
-              "recommended_baits_or_lures": {
-                "type": "array",
-                "items": { "type": "string" }
-              },
-              "presentation_tips": { "type": "string" },
-              "best_time_of_day": { "type": "string" }
-            }
-          },
-          "target_species_fit": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "restriction_status": {
+          "title": { "type": "string" },
+          "x_percent": { "type": "number", "minimum": 2, "maximum": 98 },
+          "y_percent": { "type": "number", "minimum": 2, "maximum": 98 },
+          "why_label": {
             "type": "string",
-            "enum": ["allowed", "permit_required", "seasonal_restriction", "unknown"]
-          }
+            "description": "e.g. 'Why it\\'s #1:', 'Why it\\'s incredible:', or 'Why it\\'s great:'"
+          },
+          "why_this_spot": { "type": "string" },
+          "secondary_label": {
+            "type": "string",
+            "description": "Optional e.g. 'The Terrain:' or 'Why fish love it:'"
+          },
+          "secondary_text": { "type": "string" },
+          "how_to_fish": { "type": "string" }
         }
       }
+    },
+    "best_game_plan": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 5,
+      "items": { "type": "string" }
     }
   }
 }

@@ -1,7 +1,7 @@
-# Database Schema Specification (PostgreSQL + PostGIS)
+# Database Schema Specification (Supabase PostgreSQL + PostGIS + Drizzle ORM)
 
-> **Status**: `Draft — Pending DB Stack Confirmation`  
-> **Target DB**: Free-tier PostgreSQL (Supabase / Neon) with PostGIS extension
+> **Status**: `Approved`  
+> **Target DB**: Supabase Free Tier (PostgreSQL + PostGIS) managed via **Drizzle ORM** (`db/migrations/`)
 
 ---
 
@@ -10,18 +10,20 @@
 ```mermaid
 erDiagram
     USERS ||--o{ SPOT_REVIEWS : writes
+    USERS ||--o{ RESTRICTION_ZONES : reports
     WATER_BODIES ||--o{ GRID_ANALYSES : has
     WATER_BODIES ||--o{ FISHING_SPOTS : contains
     WATER_BODIES ||--o{ RESTRICTION_ZONES : regulates
     GRID_ANALYSES ||--o{ FISHING_SPOTS : generates
+    GRID_ANALYSES ||--o{ CELL_MICRO_ANALYSES : drills_into
     FISHING_SPOTS ||--o{ SPOT_REVIEWS : receives
     SPOT_REVIEWS ||--o{ CATCH_PHOTOS : includes
 
     USERS {
-        uuid id PK
-        string email
+        uuid id PK "Matches Supabase auth.users.id"
+        string email UK
         string display_name
-        string avatar_url
+        string preferred_locale "Default: en (future: pl, es)"
         timestamp created_at
     }
 
@@ -29,46 +31,64 @@ erDiagram
         uuid id PK
         string osm_id UK
         string name
-        string water_type "freshwater_still | freshwater_flowing | brackish | saltwater_coastal"
+        string water_type "freshwater | sea"
+        string country_code "PL | ES | EU ISO-2"
+        text description "General water body overview shown on click"
         jsonb bbox "[minLng, minLat, maxLng, maxLat]"
         geometry polygon "PostGIS Polygon/MultiPolygon"
-        string country_code
         timestamp created_at
     }
 
     RESTRICTION_ZONES {
         uuid id PK
         uuid water_body_id FK
+        uuid reported_by_user_id FK "Nullable for OSM-sourced rules"
+        string cell_id "Nullable if applies to whole polygon"
         string status "allowed | permit_required | seasonal_restriction | prohibited"
         string reason
         string source "osm | community | official"
-        geometry polygon
+        geometry polygon "Optional sub-polygon"
         timestamp updated_at
     }
 
     GRID_ANALYSES {
         uuid id PK
         uuid water_body_id FK
-        string query_hash UK "Hash of (water_body_id, fishing_type, target_species, access_mode)"
-        string fishing_type
-        string target_species
+        string query_hash UK "SHA256(water_body_id, sector_bbox, water_type, fishing_type, target_species, access_mode, season)"
+        jsonb sector_bbox "[minLng, minLat, maxLng, maxLat]"
+        string water_type "freshwater | sea"
+        string fishing_type "spinning | feeder_bottom | carp | float | fly | surfcasting"
+        jsonb target_species "Array of species slugs"
         string access_mode "shore | boat"
-        jsonb grid_definition "Cells A1..Zn with bounds & metadata"
+        string season "spring | summer | autumn | winter"
+        jsonb grid_definition "Cells A1..H8 with bounds & OSM structure metadata"
         jsonb ai_response "Validated JSON matching spot-recommendation.schema.json"
+        timestamp created_at
+    }
+
+    CELL_MICRO_ANALYSES {
+        uuid id PK
+        uuid grid_analysis_id FK
+        string cell_id "e.g., D5"
+        jsonb ai_micro_response "Detailed sector breakdown for clicked cell"
         timestamp created_at
     }
 
     FISHING_SPOTS {
         uuid id PK
         uuid water_body_id FK
-        uuid grid_analysis_id FK
+        uuid grid_analysis_id FK "Nullable for community-created/pre-seeded pins"
         string cell_id "e.g., C4"
         float latitude
         float longitude
         string title
         text description
-        jsonb recommended_tactics
+        jsonb tactical_advice "{recommended_baits_or_lures, presentation_tips, best_time_of_day}"
+        jsonb target_species_fit "Array of species slugs"
+        string fishing_type
+        string access_mode "shore | boat"
         string restriction_status
+        boolean is_pre_seeded "True for pre-seeded/verified pins visible on click to registered users"
         float avg_rating
         int review_count
         timestamp created_at
@@ -97,6 +117,8 @@ erDiagram
 ```
 
 ## 2. Indexing & Performance Strategy ($0 Tier)
-- `idx_water_bodies_osm_id`: Fast lookup when a user clicks an already-indexed OSM water body.
-- `idx_grid_analyses_query_hash`: Instant `O(1)` cache hit for repeated AI queries on the same water body, fishing style, and target fish.
-- `idx_fishing_spots_water_body`: Fast retrieval of all AI-suggested and community-reviewed spots on a selected water body.
+- `idx_water_bodies_osm_id`: Instant lookup when a user clicks an already-indexed OSM water body.
+- `idx_water_bodies_polygon_gist`: PostGIS `GIST` index for point-in-polygon resolution on map clicks.
+- `idx_grid_analyses_query_hash`: `O(1)` cache hit for repeated AI grid queries (`0` LLM tokens spent).
+- `idx_cell_micro_analyses_unique`: Unique index on `(grid_analysis_id, cell_id)` to cache single-cell deep-dives.
+- `idx_fishing_spots_water_body`: Fast retrieval of all pre-seeded and AI-generated spot pins when a registered user clicks a water body.

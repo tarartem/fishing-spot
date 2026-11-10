@@ -1,41 +1,46 @@
 # 00 — Product Vision & MVP Scope
 
-> **Status**: `Draft — Pending Discovery Input`  
+> **Status**: `Approved`  
 > **Owner**: Product / Engineering  
 > **Last Updated**: 2026-11-10
 
 ---
 
 ## 1. Problem Statement
-Anglers exploring a new or unfamiliar water body (lake, river, reservoir, or coastal shoreline) struggle to answer three fundamental questions:
+Anglers exploring a water body (lake, river, reservoir, or coastal shoreline) struggle to answer three fundamental questions:
 1. **Where on this water body should I actually cast or set up?** (Given the water type, my fishing technique, and the fish species I am targeting).
-2. **Is it legal/permitted to fish in that specific zone?** (Protected reserves, private banks, seasonal bans, dam proximity rules).
+2. **Is it legal/permitted to fish in that specific zone?** (Protected reserves, private banks, dam buffers, seasonal bans, regional permits).
 3. **What have other anglers actually caught here?** (Verified community reviews, spot conditions, and catch photos).
 
-## 2. Target Audience (Personas)
-- **The Explorer Angler**: Visits a new lake, river, or coastline and wants immediate tactical guidance on high-probability sectors without spending hours scouting blind.
-- **The Specialist Angler**: Targets specific species (e.g., pike on spinning lures, carp on feeder rigs, sea bass from rocky shores) and wants spots tailored to their gear and method.
-- **The Community Contributor**: Shares catch photos, spot feedback, bank accessibility notes, and local restriction updates.
+---
 
-## 3. Core Value Proposition
-1. **Select a Water Body on a Free Map**: Click or draw a region on an open map (OpenStreetMap / MapLibre / Leaflet).
-2. **AI Tactical Grid Overlay**: The system divides the water body into a smart spatial grid (`A1..Zn`) and uses advanced AI prompting + environmental/map features to highlight top-ranked grid cells and exact pin locations with detailed fishing descriptions.
-3. **Context-Aware Filtering**: Accounts for **Sea vs. Freshwater**, **Fishing Technique**, **Target Species**, and **Restricted Zones**.
-4. **Community Proof**: Anglers leave reviews, ratings, and photos of their fishing results directly tied to spots.
+## 2. Target Audience & Initial Market
+- **Initial Launch Countries**: **Spain** and **Poland** (built on Pan-European OpenStreetMap/Overpass geospatial coverage).
+  - **Poland**: Rich freshwater lakes, lowland rivers (Vistula, Oder, Bug), reservoirs, PZW districts, nature reserves (*Rezerwaty przyrody*), and species like Pike, Zander, Perch, Carp, Bream, Tench, Trout.
+  - **Spain**: Major inland reservoirs (*embalses* like Ebro, Orellana, Cijara for Black Bass, Zander, Carp, Wels Catfish), mountain trout rivers, and Mediterranean/Atlantic coastal sea fishing (Sea Bass, Gilthead Seabream, Mackerel, Surfcasting & Rock Spinning), plus regional *Licencias* and *Cotos de Pesca*.
+- **Language Strategy**: **English** UI and AI outputs for the MVP, built with an **i18n-ready architecture** (translation keys & locale-aware AI prompts) for future localization into Polish, Spanish, and other European languages.
+
+---
+
+## 3. User Tiers: Guest vs. Registered Angler
+
+| Capability | Guest (Unauthenticated) | Registered Angler (Email Auth) |
+| :--- | :--- | :--- |
+| **Authentication Method** | Anonymous session (Cookie / IP rate-limited) | **Email Registration** (Supabase Email/Password or Magic Link — zero OAuth setup overhead) |
+| **Click Water Body on Map** | Sees water body boundary, general description, and restriction overview. **Does NOT see pre-seeded/existing spot pins.** | Immediately sees water body boundary, description, restriction overview, **AND all pre-seeded / previously discovered spot pins & community reviews**. |
+| **AI Spatial Grid Analyses** | Limited to **2 AI grid analyses total**; output restricted to **basic info** (grid overlay + top pin location & brief summary; tactical lure/bait advice locked). | **Unlimited AI grid analyses** with full tactical descriptions, bait/lure presentation tips, and confidence scores. |
+| **Single-Cell (`D5`) Micro-Analysis** | Locked (Prompts Email registration) | **Unlocked**: Click any individual grid cell on the water body for an on-demand AI deep-dive of that sector. |
+| **Spot Reviews & Catch Photos** | Locked (Prompts Email registration) | **Unlocked**: View all community reviews/photos and attach new reviews, ratings, and catch photos to water body pins. |
+| **Restriction Reporting** | View-only | **Unlocked**: Flag cells/spots with community restriction updates. |
+
+---
 
 ## 4. MVP Scope ($0 Budget) vs. Post-MVP (Funded)
 
-| Capability | MVP ($0 Budget) | Post-MVP (Budget Available) |
+| Capability | MVP ($0 Budget — Locked Stack) | Post-MVP (Budget Available) |
 | :--- | :--- | :--- |
-| **Map & Water Body Selection** | Free OSM vector/raster tiles + Overpass water polygon detection + bounding box grid | High-res satellite imagery, bathymetric depth contour maps (Navionics/C-Map integration) |
-| **AI Spot Advisor** | Free-tier LLM (e.g., Gemini Flash) + spatial grid prompt + DB caching | Multi-agent weather/barometric pressure/tide live integration + fine-tuned vision analysis of satellite tiles |
-| **Fishing Restrictions** | OSM protected area tags (`leisure=nature_reserve`, `access=no`) + community-reported flags + regional rules DB | Official government fishery API integrations & real-time license purchasing links |
-| **Reviews & Photos** | Spot ratings, text feedback, client-compressed catch photos on free cloud storage | AI fish species recognition & size estimation from photos, leaderboards, social feed |
-| **Platform** | **Next.js (TypeScript, Tailwind CSS) Mobile-First Web / PWA** on Vercel Free Tier | Native iOS & Android offline-capable mobile apps |
-
-## 5. Locked-In Discovery Decisions & Remaining Questions
-- **Target Geography (Locked)**: **Europe (EU countries)** — European freshwater & coastal species, OSM + European protected areas (`Natura 2000` / national reserves) + regional rules.
-- **Primary Platform & Stack (Locked)**: **Next.js (TypeScript, App Router, Tailwind CSS) + Supabase (Postgres/PostGIS, Auth, Storage) + MapLibre GL JS (OpenFreeMap/OSM + Turf.js) + Gemini 2.5 Flash Free Tier**.
-- `[TBD-01]` **Initial Launch Country/Countries in Europe**: Should we prioritize 1–3 specific EU countries first (e.g., Poland, Germany, Netherlands, Spain, Sweden, UK, etc.) for localized regulations & UI languages?
-- `[TBD-02]` **Guest vs. Authenticated Flow**: Can anonymous visitors run AI water body analyses (e.g., 3 free searches/day) before signing in, while requiring login to leave reviews/photos?
-- `[TBD-03]` **Grid Granularity & Interaction**: Should the AI select cells automatically across the entire water body, or can the angler also click a specific grid cell (e.g., `C4`) to ask the AI for a deep-dive analysis of that exact sector?
+| **UI Layout** | **Full-screen Map-First Web/PWA** (100% viewport map + floating search bar + side drawer on desktop / bottom sheet on mobile) | Native iOS & Android offline-capable mobile apps |
+| **Map & Spatial Grid** | **MapLibre GL JS** + **OpenFreeMap/OSM** vector tiles + **Overpass API** + **Turf.js** adaptive grid (whole lake if `<5km`; viewport/`2-3km` sector clip for rivers, large reservoirs & sea coasts) | High-res satellite imagery, bathymetric depth contour maps (Navionics/C-Map integration) |
+| **AI Spot Advisor** | **Google Gemini 2.5 Flash (Free Tier)** via provider-agnostic adapter + **strictly structural prompt** (shoreline, inflows, reeds, technique, species, season, community reviews) + **Drizzle/Postgres caching** | Live weather/wind/barometric pressure (Open-Meteo) + tide APIs + satellite vision analysis |
+| **Fishing Restrictions** | **3-Layer Hybrid**: (1) Deterministic OSM reserve/dam/no-fishing tag blocking, (2) AI summary of Poland/Spain permit & seasonal rules + legal disclaimer, (3) Community restriction flags | Official government fishery API integrations & real-time permit links |
+| **Reviews & Photos** | Attached to water body spot pins, client-side WebP compression (`<200KB`) stored in **Supabase Storage Free Tier** | AI fish recognition & length/weight estimation from photos, leaderboards |

@@ -1,39 +1,47 @@
-# F01 — Interactive Map & Water Body Selection
+# F01 — Full-Screen Map, Water Body Selection & Spatial Grid
 
-> **Status**: `Draft`  
+> **Status**: `Approved`  
 > **Module**: `src/modules/map-grid/`
 
 ---
 
 ## 1. User Story
-**As an** angler,  
-**I want to** browse a free interactive map and click or select a water body (lake, river stretch, or coastal area),  
-**So that** the system can identify the water body boundaries and overlay a tactical fishing grid.
+**As an** angler (guest or registered),  
+**I want to** open a full-screen interactive map, click on a water body (lake, river, reservoir, or coastal shoreline in Poland, Spain, or across Europe), see its description and (if registered) existing spots, and generate an adaptive spatial grid,  
+**So that** I can immediately understand the water body and prepare a tactical fishing sector.
 
-## 2. Functional Requirements
-1. **Free Map Rendering**:
-   - Render an interactive 2D/vector map using a $0-cost provider (e.g., MapLibre GL JS or Leaflet with OpenFreeMap / OpenStreetMap tiles).
-   - Support geolocation ("Locate Me"), search by water body/place name (via Nominatim/Photon free geocoding), and pan/zoom.
-2. **Water Body Selection**:
-   - When the user clicks a point on a water body (or draws a bounding box on large rivers/coasts):
-     - Query OpenStreetMap / Overpass API (or cached PostGIS water polygons) to resolve the water body geometry (`natural=water`, `waterway=river`, `natural=coastline`).
-     - Highlight the selected water body boundary on the map.
-3. **Spatial Grid Generation**:
-   - Partition the selected water body bounding box into a readable grid (e.g., `8x8` or adaptive cell size between `50m x 50m` and `250m x 250m` depending on water body area).
-   - Label rows `A..H` and columns `1..8` (`A1`, `A2`, etc.).
-   - Discard cells that have 0% overlap with water/shoreline.
-   - Classify remaining cells (`shoreline`, `open_water`, `inflow_outflow`, `island_structure`).
+## 2. UI/UX Layout Specification
+- **Full-Screen Map-First Interface**:
+  - `100vw x 100vh` **MapLibre GL JS** canvas using free **OpenFreeMap / OpenStreetMap** vector tiles.
+  - **Floating Top Search & Filter Bar**: Search water bodies/locations by name (via free Nominatim/Photon geocoding) + quick "Locate Me" GPS button + User Auth indicator.
+  - **Responsive Contextual Panel**:
+    - **Desktop**: Collapsible slide-over drawer (`420px` width) on the left/right.
+    - **Mobile**: Swipeable bottom sheet (`collapsed` / `half` / `expanded`).
 
-## 3. Acceptance Criteria (Given / When / Then)
-- **AC-F01-1 (Water Body Click)**:
-  - *Given* the map is displayed at zoom level >= 11,
-  - *When* the user clicks on a lake, river, or coastal water area,
-  - *Then* the system highlights the water body polygon and displays its name and water type (Freshwater vs. Sea).
-- **AC-F01-2 (Grid Overlay)**:
-  - *Given* a water body is selected,
-  - *When* the user triggers "Generate Fishing Grid",
-  - *Then* the map renders labeled grid cells (`A1..Zn`) strictly covering the water body and its immediate shoreline.
-- **AC-F01-3 (Non-Water Click Handling)**:
-  - *Given* the user clicks on dry land far (>100m) from any water body,
-  - *When* the system checks for water features,
-  - *Then* it displays a friendly prompt asking the user to select a lake, river, or coastline.
+## 3. Water Body Click & Selection Behavior
+1. **Resolving the Water Body**:
+   - When the user clicks `[lat, lng]` on the map:
+     - Check PostgreSQL (`water_bodies`) for an existing cached polygon containing `[lat, lng]`.
+     - On cache miss, query **Overpass API** for the enclosing or nearest water feature (`natural=water`, `water=*`, `waterway=river|canal`, `natural=coastline`) within `100m`.
+     - Highlight the water body boundary on the map.
+2. **Tiered Data Display on Click**:
+   - **Both Guest & Registered**: Display water body name, auto-detected water type (`freshwater` vs `sea`), country/region (`PL`, `ES`, etc.), general water body description, and restriction overview.
+   - **Registered Users Only**: Immediately load and render all **existing / pre-seeded Water Body Spot Pins** on the map along with their average star ratings and community review counts.
+   - **Guests**: Do **not** receive or render pre-seeded spot pins; see a prompt inviting them to run one of their 2 free basic AI analyses or register with Email for full spot access.
+3. **Adaptive Spatial Grid Sizing (`Turf.js`)**:
+   - **Small/Medium Lakes (`max_dimension < 5km`)**: Generate a grid over the entire water body bounding box.
+   - **Large Reservoirs, Long Rivers (e.g. Vistula, Ebro), or Sea Coastlines (`max_dimension >= 5km`)**: Clip the water body polygon to the current map viewport or a `~2.5km` radius tactical sector centered on the user's clicked point so every grid cell remains tactical (`100m–300m` cell width).
+   - Label rows `A..H` and columns `1..8` (e.g., `A1..H8`), discarding dry-land-only cells (`0%` water/shoreline intersection).
+
+## 4. Acceptance Criteria (Given / When / Then)
+- **AC-F01-1 (Water Body Click — Registered vs. Guest)**:
+  - *Given* a water body has 3 existing spot pins in the database,
+  - *When* a **registered user** clicks the water body, *Then* the water body boundary, description, and all 3 spot pins are displayed on the map;
+  - *When* a **guest user** clicks the same water body, *Then* only the water body boundary and general description are displayed (0 pre-seeded pins shown).
+- **AC-F01-2 (Adaptive Tactical Sector Grid)**:
+  - *Given* the user selects a small lake (`< 5km`), *When* the grid is built, *Then* it covers the entire lake;
+  - *Given* the user clicks a point on a 500km river (e.g., Vistula or Ebro) or sea coast, *When* the grid is built, *Then* it clips a `~2.5km` radius tactical sector around the clicked point with cell sizes between `100m` and `300m`.
+- **AC-F01-3 (Land Click Rejection)**:
+  - *Given* the user clicks dry land `> 100m` from any water feature,
+  - *When* Overpass/PostGIS finds no water body,
+  - *Then* the UI shows a non-blocking toast prompting the angler to click a lake, river, reservoir, or coastline.

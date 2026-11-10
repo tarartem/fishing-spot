@@ -85,6 +85,13 @@ export default function HomePage() {
     if (!rawScreenshotUrl) return;
     setIsAnalyzing(true);
     try {
+      const centerLng = (selectedBbox[0] + selectedBbox[2]) / 2;
+      const centerLat = (selectedBbox[1] + selectedBbox[3]) / 2;
+      const isNearActivePin =
+        activeWaterBody &&
+        Math.abs(activeWaterBody.centerLng - centerLng) < 0.015 &&
+        Math.abs(activeWaterBody.centerLat - centerLat) < 0.015;
+
       const res = await fetch('/api/ai-advisor/analyze-screenshot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,7 +99,7 @@ export default function HomePage() {
           bbox: selectedBbox,
           griddedScreenshotBase64: griddedPreviewUrl,
           anglerGearNote,
-          hintWaterBodyId: activeWaterBody?.id,
+          hintWaterBodyId: isNearActivePin ? activeWaterBody?.id : undefined,
         }),
       });
 

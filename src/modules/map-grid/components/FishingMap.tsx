@@ -147,9 +147,20 @@ export function FishingMap({
     }
   }, [activeWaterBody]);
 
-  const resolveCurrentBbox = (): BoundingBox => {
+  const resolveCurrentBbox = (customCrop?: CropBoxPixels | null): BoundingBox => {
     if (mapRef.current) {
       try {
+        if (customCrop && customCrop.width > 20 && customCrop.height > 20) {
+          const sw = mapRef.current.unproject([
+            customCrop.x,
+            customCrop.y + customCrop.height,
+          ]);
+          const ne = mapRef.current.unproject([
+            customCrop.x + customCrop.width,
+            customCrop.y,
+          ]);
+          return [sw.lng, sw.lat, ne.lng, ne.lat];
+        }
         const b = mapRef.current.getBounds();
         if (b) {
           return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
@@ -171,7 +182,7 @@ export function FishingMap({
 
   const triggerScreenshotCapture = (customCrop: CropBoxPixels | null) => {
     const canvas = mapRef.current?.getCanvas() ?? null;
-    const bbox = resolveCurrentBbox();
+    const bbox = resolveCurrentBbox(customCrop);
     onCaptureArea({
       canvas,
       cropBox: customCrop,

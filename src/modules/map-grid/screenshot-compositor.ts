@@ -58,9 +58,31 @@ export async function captureMapAreaScreenshot(params: {
 
       if (sw > 20 && sh > 20) {
         ctx.drawImage(params.sourceCanvas, sx, sy, sw, sh, 0, 0, targetSize, targetSize);
-        // Verify canvas isn't completely transparent/empty
-        const sample = ctx.getImageData(targetSize / 2, targetSize / 2, 1, 1).data;
-        if (sample[3] > 0 && (sample[0] + sample[1] + sample[2] > 15)) {
+        // Verify canvas isn't completely transparent/uninitialized across multiple sample points
+        const samplePoints = [
+          [0.2, 0.2],
+          [0.5, 0.2],
+          [0.8, 0.2],
+          [0.2, 0.5],
+          [0.5, 0.5],
+          [0.8, 0.5],
+          [0.2, 0.8],
+          [0.5, 0.8],
+          [0.8, 0.8],
+        ];
+        let opaqueCount = 0;
+        let totalBrightness = 0;
+        for (const [px, py] of samplePoints) {
+          const d = ctx.getImageData(
+            Math.floor(targetSize * px),
+            Math.floor(targetSize * py),
+            1,
+            1
+          ).data;
+          if (d[3] > 0) opaqueCount++;
+          totalBrightness += d[0] + d[1] + d[2];
+        }
+        if (opaqueCount >= 5 && totalBrightness > 10) {
           capturedFromWebGL = true;
         }
       }
@@ -74,6 +96,7 @@ export async function captureMapAreaScreenshot(params: {
       ctx,
       targetSize,
       params.mapStyle,
+      params.bbox,
       params.waterBodyLabel
     );
   }
@@ -82,15 +105,22 @@ export async function captureMapAreaScreenshot(params: {
 }
 
 /**
- * Draws a realistic aerial satellite / terrain / plain water body scene with
- * turquoise/tan underwater shelves, deep navy river channel, access roads, and peninsula landmarks.
+ * Draws a fallback aerial satellite / terrain / plain water body scene when WebGL is unavailable
+ * (e.g., headless CI test environment without GPU).
  */
 function drawRealisticWaterBodySatelliteScene(
   ctx: CanvasRenderingContext2D,
   size: number,
   mapStyle: MapStyleMode,
+  bbox: BoundingBox,
   waterBodyLabel?: string
 ): void {
+  const [minLng, minLat, maxLng, maxLat] = bbox;
+  const centerLng = (minLng + maxLng) / 2;
+  const centerLat = (minLat + maxLat) / 2;
+  const isCortes =
+    Math.abs(centerLng - -0.946) < 0.03 && Math.abs(centerLat - 39.242) < 0.03;
+
   // 1. Land terrain background
   const landGrad = ctx.createLinearGradient(0, 0, size, size);
   if (mapStyle === 'satellite') {
@@ -122,7 +152,11 @@ function drawRealisticWaterBodySatelliteScene(
   // 2. Outer Turquoise / Tan Underwater Shelf (Escalón)
   ctx.save();
   ctx.beginPath();
-  traceReservoirPath(ctx, size);
+  if (isCortes) {
+    traceReservoirPath(ctx, size);
+  } else {
+    traceDynamicWaterPath(ctx, size, centerLng, centerLat);
+  }
   ctx.lineWidth = size * 0.042;
   ctx.strokeStyle = mapStyle === 'plain' ? '#bae6fd' : '#74a892';
   ctx.stroke();
@@ -153,7 +187,7 @@ function drawRealisticWaterBodySatelliteScene(
   ctx.fill();
   ctx.restore();
 
-  // 4. Access Road along western canyon bank (Playa del Ral -> E2 -> Carpa Cofrentes)
+  // 4. Access Road
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(size * 0.31, size * 0.02);
@@ -165,19 +199,45 @@ function drawRealisticWaterBodySatelliteScene(
   ctx.stroke();
   ctx.restore();
 
-  // 5. Map Landmark Labels matching the satellite view
+  // 5. Map Landmark Labels
   ctx.save();
   ctx.font = 'bold 13px system-ui, sans-serif';
   ctx.fillStyle = '#ffffff';
   ctx.shadowColor = 'rgba(0,0,0,0.85)';
   ctx.shadowBlur = 4;
-  ctx.fillText('Playa del Ral', size * 0.31, size * 0.045);
-  ctx.fillText('Dehesa de Cortes', size * 0.42, size * 0.69);
-  ctx.fillText('Carpa Cofrentes', size * 0.08, size * 0.72);
-  if (waterBodyLabel) {
-    ctx.fillText(waterBodyLabel, size * 0.68, size * 0.81);
+  if (isCortes) {
+    ctx.fillText('Playa del Ral', size * 0.31, size * 0.045);
+    ctx.fillText('Dehesa de Cortes', size * 0.42, size * 0.69);
+    ctx.fillText('Carpa Cofrentes', size * 0.08, size * 0.72);
+  } else {
+    ctx.fillText(
+      waterBodyLabel || `Sector ${centerLat.toFixed(3)}°N, ${centerLng.toFixed(3)}°E`,
+      size * 0.35,
+      size * 0.52
+    );
   }
   ctx.restore();
+}
+
+function traceDynamicWaterPath(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  centerLng: number,
+  centerLat: number
+): void {
+  const seed = Math.abs(Math.round(centerLng * 1000) + Math.round(centerLat * 1000));
+  const points = 12;
+  const cx = s * 0.52;
+  const cy = s * 0.52;
+  for (let i = 0; i < points; i++) {
+    const angle = (i / points) * Math.PI * 2;
+    const radiusVar = 0.24 + (((seed * (i + 3) * 19) % 18) / 100);
+    const px = cx + Math.cos(angle) * s * radiusVar;
+    const py = cy + Math.sin(angle) * s * radiusVar;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
 }
 
 function traceReservoirPath(ctx: CanvasRenderingContext2D, s: number): void {

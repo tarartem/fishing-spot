@@ -8,6 +8,7 @@ import type {
   CellMicroAnalysisResponse,
   FishingType,
   GridCell,
+  MapStyleMode,
   RecommendedSpot,
   TargetSpecies,
   WaterBodyPinSummary,
@@ -16,6 +17,7 @@ import type {
 import type { WaterBodyTierResponse } from '@/shared/db/store';
 
 export default function HomePage() {
+  const [mapStyle, setMapStyle] = useState<MapStyleMode>('satellite');
   const [waterBodyPins, setWaterBodyPins] = useState<WaterBodyPinSummary[]>([]);
   const [countryFilter, setCountryFilter] = useState<'ALL' | 'PL' | 'ES'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -292,6 +294,8 @@ export default function HomePage() {
 
       {/* Full-Screen Interactive Map + Named Water Body Pins + Spatial Grid */}
       <FishingMap
+        mapStyle={mapStyle}
+        onChangeMapStyle={setMapStyle}
         waterBodyPins={filteredPins}
         selectedWaterBodyId={selectedWaterBodyId}
         selectedDetails={selectedDetails}

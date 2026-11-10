@@ -79,6 +79,10 @@ export interface TacticalAdvice {
   best_time_of_day: string;
 }
 
+export type SpotCategory = 'primary_hot' | 'structure_ledge' | 'shore_cove';
+
+export type MapStyleMode = 'satellite' | 'terrain' | 'plain';
+
 export interface RecommendedSpot {
   id?: string;
   rank: number;
@@ -93,6 +97,8 @@ export interface RecommendedSpot {
   tactical_advice: TacticalAdvice;
   target_species_fit: string[];
   restriction_status: Exclude<RestrictionStatus, 'prohibited'>;
+  spot_category?: SpotCategory;
+  feature_tags?: string[];
   avg_rating?: number;
   review_count?: number;
 }

@@ -189,7 +189,7 @@ function buildDeterministicGridRecommendation(
   });
 
   scoredCells.sort((a, b) => b.score - a.score);
-  const topCandidates = scoredCells.slice(0, 4);
+  const topCandidates = scoredCells.slice(0, 6);
 
   const speciesLabels =
     input.targetSpecies.includes('any') || input.targetSpecies.length === 0
@@ -198,6 +198,7 @@ function buildDeterministicGridRecommendation(
 
   const recommendedSpots: RecommendedSpot[] = topCandidates.map(
     ({ cell, preSeeded, score }, idx) => {
+      const rank = idx + 1;
       const safeRestriction =
         cell.restrictionStatus === 'prohibited'
           ? 'permit_required'
@@ -207,15 +208,31 @@ function buildDeterministicGridRecommendation(
         preSeeded?.tactical_advice.recommended_baits_or_lures ??
         TECHNIQUE_LURE_BAIT_MAP[input.fishingType];
 
+      const defaultCategory =
+        rank <= 2
+          ? 'primary_hot'
+          : rank === 3 || rank === 4
+            ? 'shore_cove'
+            : 'structure_ledge';
+
       return {
         id: preSeeded?.id ?? `spot-${input.waterBody.id}-${cell.cellId.toLowerCase()}`,
-        rank: idx + 1,
+        rank,
         cell_id: cell.cellId,
         coordinates: preSeeded?.coordinates ?? cell.center,
         title:
           preSeeded?.title ??
           `Cell ${cell.cellId} — ${formatFeaturesTitle(cell.features)}`,
         confidence_score: score,
+        spot_category: preSeeded?.spot_category ?? defaultCategory,
+        feature_tags:
+          preSeeded?.feature_tags ??
+          cell.features.map((f) =>
+            f
+              .split('_')
+              .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+              .join(' ')
+          ),
         why_this_spot:
           preSeeded?.why_this_spot ??
           `Grid cell ${cell.cellId} features ${cell.features.map((f) => f.replace(/_/g, ' ')).join(', ')} (${cell.zoneType.replace(/_/g, ' ')}), creating a prime holding and feeding lane for ${speciesLabels.join(', ')} during ${input.season} when angling from the ${input.accessMode}.`,

@@ -11,20 +11,20 @@ import type {
   WaterBodyRecord,
 } from '@/shared/types/domain';
 
-const ROW_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
-const GRID_DIMENSION = 8; // 8x8 tactical grid (A1..H8)
+const COL_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
+const GRID_DIMENSION = 8; // 8 columns (A..H) x 8 rows (1..8) -> A1..H8
 const MAX_UNCLIPPED_SPAN_KM = 5.0;
-const TACTICAL_SECTOR_RADIUS_KM = 2.0; // ~4km x 4km box -> ~500m/250m cells
+const TACTICAL_SECTOR_RADIUS_KM = 2.0;
 
 const DETERMINISTIC_STRUCTURE_FEATURES: Record<string, string[]> = {
-  A: ['northern_bank', 'inflow_channel'],
+  A: ['western_bank', 'inflow_cove'],
   B: ['reed_bed', 'shallow_shelf'],
-  C: ['channel_drop_off', 'hard_mussel_bottom'],
-  D: ['submerged_ledge', 'current_seam'],
-  E: ['rocky_point', 'weed_margin'],
-  F: ['sheltered_bay', 'silt_to_sand_transition'],
-  G: ['deep_basin_slope', 'windward_point'],
-  H: ['outflow_margin', 'stone_riprap'],
+  C: ['cove_access', 'silt_to_sand_transition'],
+  D: ['submerged_ledge', 'narrow_canyon_point'],
+  E: ['main_channel_drop_off', 'rocky_peninsula_point'],
+  F: ['submerged_island_margin', 'deep_terrace'],
+  G: ['sheltered_bay', 'weed_margin'],
+  H: ['eastern_headland', 'stone_riprap'],
 };
 
 /**
@@ -46,9 +46,9 @@ export function calculateBboxSpanKm(bbox: BoundingBox): number {
 }
 
 /**
- * AC-F01-2: Small lakes (< 5km) use the full water body bounding box.
- * Large reservoirs, long rivers (e.g. Vistula, Ebro), or sea coastlines (>= 5km)
- * are clipped to a tactical sector (~2km-2.5km radius) around the clicked/pin point.
+ * Small lakes (< 5km) use the full water body bounding box.
+ * Large reservoirs, long rivers, or sea coastlines (>= 5km) are clipped to a
+ * tactical sector (~2km-2.5km radius) around the focus coordinate.
  */
 export function resolveTacticalSectorBbox(
   waterBodyBbox: BoundingBox,
@@ -81,9 +81,10 @@ export interface GenerateGridParams {
 }
 
 /**
- * Deterministically partitions a tactical sector into an 8x8 coordinate grid (A1..H8),
- * discards dry-land cells that do not intersect the water body polygon, and attaches
- * shoreline accessibility + Layer 1/3 restriction statuses.
+ * Deterministically partitions a tactical sector into an 8x8 coordinate grid:
+ * Columns A..H (West to East) and Rows 1..8 (North to South), so top row is A1..H1
+ * and bottom row is A8..H8.
+ * Filters out dry-land cells that do not intersect the water body polygon.
  */
 export function generateSpatialGrid({
   sectorBbox,
@@ -102,15 +103,16 @@ export function generateSpatialGrid({
 
   const cells: GridCell[] = [];
 
+  // Row 1 is northernmost (top of map), Row 8 is southernmost (bottom of map)
   for (let rowIdx = 0; rowIdx < GRID_DIMENSION; rowIdx++) {
-    const rowLabel = ROW_LABELS[rowIdx];
-    // Row A is northernmost (top of map), Row H is southernmost (bottom of map)
+    const rowNumber = rowIdx + 1;
     const cellMaxLat = Number((maxLat - rowIdx * latStep).toFixed(6));
     const cellMinLat = Number((maxLat - (rowIdx + 1) * latStep).toFixed(6));
 
+    // Col A is westernmost (left of map), Col H is easternmost (right of map)
     for (let colIdx = 0; colIdx < GRID_DIMENSION; colIdx++) {
-      const colNumber = colIdx + 1;
-      const cellId = `${rowLabel}${colNumber}`;
+      const colLabel = COL_LABELS[colIdx];
+      const cellId = `${colLabel}${rowNumber}`;
       const cellMinLng = Number((minLng + colIdx * lngStep).toFixed(6));
       const cellMaxLng = Number((minLng + (colIdx + 1) * lngStep).toFixed(6));
 
@@ -132,7 +134,6 @@ export function generateSpatialGrid({
       const centerLat = Number(((cellMinLat + cellMaxLat) / 2).toFixed(6));
       const centerLng = Number(((cellMinLng + cellMaxLng) / 2).toFixed(6));
 
-      // Check how many of the 4 corners lie inside the water polygon to distinguish shoreline vs open_water
       const corners = [
         point([cellMinLng, cellMinLat]),
         point([cellMaxLng, cellMinLat]),
@@ -155,11 +156,10 @@ export function generateSpatialGrid({
         : (rowIdx + colIdx) % 2 === 0
           ? 'structure'
           : 'open_water';
-      if (rowIdx === 0 && (colIdx === 2 || colIdx === 3)) {
+      if (rowIdx === 0 && (colIdx === 3 || colIdx === 4)) {
         zoneType = 'inflow_outflow';
       }
 
-      // Check deterministic restriction zones matching cellId or intersecting bounds
       let restrictionStatus: RestrictionStatus = defaultStatus;
       let restrictionReason: string | undefined = overallStatusRule?.reason;
 
@@ -184,7 +184,7 @@ export function generateSpatialGrid({
         }
       }
 
-      const baseFeatures = DETERMINISTIC_STRUCTURE_FEATURES[rowLabel] ?? [
+      const baseFeatures = DETERMINISTIC_STRUCTURE_FEATURES[colLabel] ?? [
         'natural_bank',
       ];
       const features = shoreAccessible
@@ -193,8 +193,8 @@ export function generateSpatialGrid({
 
       cells.push({
         cellId,
-        rowLabel,
-        colIndex: colNumber,
+        rowLabel: colLabel,
+        colIndex: rowNumber,
         bounds: [cellMinLng, cellMinLat, cellMaxLng, cellMaxLat],
         center: { latitude: centerLat, longitude: centerLng },
         zoneType,

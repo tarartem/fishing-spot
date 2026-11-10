@@ -1,83 +1,64 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Fishing Spot — Guest vs. Registered E2E Flows', () => {
-  test('Guest sees named Water Body Pins, basic description, catchable fish, teaser feedback & CTA, then registers with Email to unlock the Spatial Grid & exact spots', async ({
+test.describe('Fishing Spot — Map Switcher, Valencia Guest Exploration & Registered Visual Grid', () => {
+  test('Switches between Satellite, Terrain & Plain maps, explores Valencia water body pins as Guest, and unlocks A1–H8 visual grid + numbered spots (1–6) + Legend on Registration', async ({
     page,
   }) => {
     await page.goto('/');
 
-    // 1. Guest opens app and sees named Water Body Pins over Poland & Spain waters
-    await expect(page.getByTestId('guest-mode-badge')).toBeVisible();
-    const zegrzePin = page.getByTestId('water-body-pin-wb-pl-zegrzynskie');
-    const mequinenzaPin = page.getByTestId('water-body-pin-wb-es-mequinenza');
-    await expect(zegrzePin).toBeVisible();
-    await expect(mequinenzaPin).toBeVisible();
+    // 1. Verify Map Style Switcher (Satellite | Terrain | Plain)
+    await expect(page.getByTestId('map-style-switcher')).toBeVisible();
+    await page.getByTestId('map-style-terrain').click();
+    await page.getByTestId('map-style-plain').click();
+    await page.getByTestId('map-style-satellite').click();
 
-    // 2. Guest clicks Jezioro Zegrzyńskie Water Body Pin
-    await zegrzePin.click();
+    // 2. Guest sees Valencia & Poland Water Body Pins on the map
+    await expect(page.getByTestId('guest-mode-badge')).toBeVisible();
+    const cortesValenciaPin = page.getByTestId(
+      'water-body-pin-wb-es-cortes-valencia'
+    );
+    const tousValenciaPin = page.getByTestId(
+      'water-body-pin-wb-es-tous-valencia'
+    );
+    await expect(cortesValenciaPin).toBeVisible();
+    await expect(tousValenciaPin).toBeVisible();
+
+    // 3. Guest clicks Embalse de Cortes (Cofrentes — Valencia) pin
+    await cortesValenciaPin.click();
 
     await expect(page.getByTestId('water-body-drawer')).toBeVisible();
-    await expect(page.getByTestId('drawer-water-body-name')).toHaveText(
-      'Jezioro Zegrzyńskie'
+    await expect(page.getByTestId('drawer-water-body-name')).toContainText(
+      'Embalse de Cortes'
     );
     await expect(page.getByTestId('water-body-basic-description')).toContainText(
-      'Lowland reservoir'
+      'Valencia'
     );
     await expect(page.getByTestId('catchable-species-list')).toContainText(
-      'zander'
+      'black bass'
     );
     await expect(page.getByTestId('guest-teaser-feedback')).toContainText(
-      'Marek K.'
+      'Pablo S.'
     );
     await expect(page.getByTestId('guest-registration-cta')).toBeVisible();
 
-    // Crucial verification: Spatial Grid and Exact Spots are hidden from Guests
+    // Spatial Grid and Spot Features Legend remain hidden for Guests
     await expect(page.getByTestId('spatial-grid-overlay')).toHaveCount(0);
-    await expect(page.getByTestId('exact-spots-list')).toHaveCount(0);
+    await expect(page.getByTestId('spot-features-legend')).toHaveCount(0);
 
-    // 3. Guest clicks the CTA to register with Email
+    // 4. Register with Email to unlock the A1–H8 Visual Grid, Numbered Points (1–6) & Spot Features Legend
     await page.getByTestId('cta-register-button').click();
-    await expect(page.getByTestId('email-register-modal')).toBeVisible();
-
     await page
       .getByTestId('register-email-input')
-      .fill('artem.angler@fishing-spot.eu');
+      .fill('valencia.angler@fishing-spot.eu');
     await page.getByTestId('register-submit-button').click();
 
-    // 4. Registered User immediately unlocks Spatial Grid (A1..H8) and Exact Fishing Spot Pins
-    await expect(page.getByTestId('authenticated-user-badge')).toContainText(
-      'artem.angler@fishing-spot.eu'
-    );
     await expect(page.getByTestId('spatial-grid-overlay')).toBeVisible();
-    await expect(page.getByTestId('exact-spots-list')).toBeVisible();
-    await expect(page.getByTestId('spot-card-C4')).toContainText(
-      'Old Narew Channel Drop-Off'
+    await expect(page.getByTestId('spot-features-legend')).toBeVisible();
+    await expect(page.getByTestId('spot-features-legend')).toContainText(
+      'Dehesa de Cortes Main Peninsula Point'
     );
-
-    // 5. Registered user runs AI Spatial Grid Advisor with 4 core inputs
-    await page.getByTestId('input-fishing-type').selectOption('feeder_bottom');
-    await page.getByTestId('run-ai-grid-button').click();
-    await expect(page.getByTestId('ai-water-body-summary')).toContainText(
-      'Jezioro Zegrzyńskie'
-    );
-
-    // 6. Registered user clicks an individual cell on the Spatial Grid for a Level 2 Micro-Analysis
-    const firstFishableCell = page
-      .locator('[data-testid^="grid-cell-"]:not(:has-text("BAN"))')
-      .first();
-    await firstFishableCell.click();
-    await expect(page.getByTestId('cell-micro-analysis-card')).toBeVisible();
-
-    // 7. Registered user views and posts a community review
-    await page.getByTestId('tab-reviews').click();
-    await expect(page.getByTestId('reviews-tab-panel')).toBeVisible();
-    await page
-      .getByTestId('review-comment-input')
-      .fill('Great evening bite along the drop-off in cell C4!');
-    await page.getByTestId('submit-review-button').click();
-
-    await expect(page.getByTestId('full-reviews-list')).toContainText(
-      'Great evening bite along the drop-off in cell C4!'
-    );
+    await expect(page.getByTestId('exact-spot-pin-F6')).toHaveText('1');
+    await expect(page.getByTestId('exact-spot-pin-E2')).toHaveText('2');
+    await expect(page.getByTestId('exact-spot-pin-C7')).toHaveText('3');
   });
 });

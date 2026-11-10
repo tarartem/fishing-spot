@@ -1,45 +1,39 @@
-# F02 — AI Spatial Grid & Exact Spot Assistant
+# F02 — AI Spatial Grid, Numbered Spot Points & Feature Legend
 
 > **Status**: `Approved`  
 > **Module**: `src/modules/ai-advisor/`  
-> **Prompt Spec**: [`prompts/spot-finder-grid.prompt.md`](../../prompts/spot-finder-grid.prompt.md)
+> **Prompt Spec**: [`prompts/spot-finder-grid.prompt.md`](../../prompts/spot-finder-grid.prompt.md)  
+> **Last Updated**: 2026-11-10
 
 ---
 
 ## 1. User Story
-**As a** registered angler who has selected a water body on the map,  
-**I want to** configure my 4 fishing parameters so the AI overlays a spatial grid (`A1..H8`), pins the exact Top 3–5 fishing spots with tactical descriptions, and lets me click any individual grid cell for a sector deep-dive,  
-**So that** I know the exact spots on the water body where I should go fishing.
+**As a** registered angler who has clicked a water body pin on the map,  
+**I want to** see the `A1–H8` spatial grid overlaid on the water body with numbered circular fishing spot markers (`1` to `6`) and a clear **Spot Features Legend** describing each location,  
+**So that** I can immediately match each numbered point on the water body grid to its structural features, target species, and fishing tactics.
 
-## 2. Tiered AI Capabilities: Guest vs. Registered
-1. **Guest Tier (Basic Water Body Info Only — Max 2 Runs)**:
-   - Guests clicking an already-seeded Water Body Pin read its cached basic description, catchable fish list, and teaser feedback for free (`0` AI calls).
-   - If a guest selects a water body and runs an AI analysis (limited to **2 runs max**), the API only returns **basic water-body-level info** (general description of the water body and what fish species can be caught there) + the **Registration CTA**.
-   - **Exact fishing spots on the spatial grid (`A1..H8`) and tactical descriptions are strictly reserved for Registered Users.**
-2. **Registered Tier (Full Spatial Grid & Exact Spots — Unlimited)**:
-   - Unlocks the **Spatial Grid overlay (`A1..H8`)** on the map.
-   - Unlocks the **4 Core Angler Inputs**:
-     1. **Water Type (`waterType`)**: `freshwater` vs. `sea` (auto-detected, editable).
-     2. **Fishing Technique (`fishingType`)**: `spinning`, `feeder_bottom`, `carp`, `float`, `fly`, or `surfcasting`.
-     3. **Target Fish Species (`targetSpecies`)**: Multi-select from European freshwater/sea species or `any`.
-     4. **Access Mode (`accessMode`)**: `shore` vs. `boat` (+ `season` auto-filled).
-   - **Level 1 Grid Output**: Highlights and pins the **Top 3–5 exact fishing spots** inside valid grid cells with full descriptions (`why_this_spot`, `tactical_advice`: baits/lures, presentation, best time of day, and restriction status).
-   - **Level 2 Single-Cell Micro-Analysis**: Registered anglers can click any individual grid cell (e.g., `D5`) for an on-demand AI deep-dive of that sector.
+## 2. Visual Grid & Numbered Spot Markers Specification
+Matching the reference tactical grid layouts:
+1. **Grid Coordinate Convention**:
+   - `8` columns (`A, B, C, D, E, F, G, H` from left/West to right/East) × `8` rows (`1, 2, 3, 4, 5, 6, 7, 8` from top/North to bottom/South).
+   - Cell IDs follow `<Col><Row>` (e.g., `A1`, `B1`, `C1` ... `E1`, `F6`, `C7`, `H8`), rendered in the top-left corner of each grid cell.
+2. **Numbered Circular Spot Markers (`1`–`6`)**:
+   - Placed at exact `[latitude, longitude]` coordinates on the water body (never on dry land).
+   - Color-coded by tactical tier & feature type:
+     - **Red Circle (`1`, `2`)**: **Primary Hot Spot** — Trophy structure, submerged island tip, or main channel rocky point (e.g., `F6`, `E2`).
+     - **Orange / Amber Circle (`3`, `4`, `5`, `6`)**: **Drop-Off / Ledge Spot** — Steep bank transition, submerged terrace, or secondary peninsula point (e.g., `E4`, `E7`).
+     - **Light Blue Circle (`3`, `4`, `5`, `6`)**: **Shore Access / Bay Spot** — Bank-accessible beach, sheltered feeder/carp bay, or inflow cove (e.g., `E1`, `C7`).
+3. **Spot Features Legend**:
+   - Displayed alongside/below the water body grid for registered users:
+     - **Color Category Legend**: Explains Red (Primary Hot Spot), Amber (Drop-Off / Structure Ledge), Blue (Shore / Cove Access), and Prohibited Reserve zones.
+     - **Spot-by-Spot Feature Breakdown**: Connects every numbered marker (`#1` through `#6`) + its Grid Cell (`e.g. Cell F6`) to its key hydro-structural features (e.g., *Submerged Rocky Point*, *9m Channel Drop-off*, *Sheltered Carp Bay*, *Submerged Island*), target fish, and recommended baits/lures.
 
-## 3. Strictly Structural Prompting & DB Caching ($0 MVP)
-- Keyed in `grid_analyses` by `query_hash = SHA256(water_body_id + sector_bbox_key + water_type + fishing_type + sorted(target_species) + access_mode + season)`.
-- Cache hits cost `0` LLM tokens; cache misses invoke **Google Gemini 2.5 Flash**, validate against `spot-recommendation.schema.json`, and persist the discovered spots.
-
-## 4. Acceptance Criteria (Given / When / Then)
-- **AC-F02-1 (Guest Cannot Access Grid Spots)**:
-  - *Given* an unauthenticated guest user clicks a water body or runs one of their 2 basic AI checks,
-  - *When* the response is rendered,
-  - *Then* the user sees only the basic water body description, fish species available, sample feedback, and the Registration CTA; no spatial grid or exact spot coordinates are returned.
-- **AC-F02-2 (Registered User Unlocks Grid & Exact Spots)**:
-  - *Given* a registered user selects a water body and submits the 4 core inputs,
-  - *When* the AI analysis completes,
-  - *Then* the spatial grid (`A1..H8`) and 3–5 exact fishing spot pins are rendered on the map with full tactical descriptions.
-- **AC-F02-3 (Single-Cell Deep-Dive for Registered Users)**:
-  - *Given* an active spatial grid on the map for a registered user,
-  - *When* the user clicks cell `D5` and requests a sector micro-analysis,
-  - *Then* the AI returns a tactical breakdown specific to `D5`.
+## 3. Acceptance Criteria (Given / When / Then)
+- **AC-F02-1 (Guest Cannot Access Grid or Numbered Spot Points)**:
+  - *Given* an unauthenticated guest user clicks a Water Body Pin,
+  - *When* the water body drawer opens,
+  - *Then* they see only the basic description, catchable fish species, teaser feedback, and Registration CTA.
+- **AC-F02-2 (Registered User Sees A1–H8 Grid, Numbered Points 1–6 & Spot Features Legend)**:
+  - *Given* a registered user clicks a Water Body Pin or runs the AI Grid Advisor,
+  - *When* the water body view renders,
+  - *Then* the `A1–H8` grid overlay, up to 6 numbered circular spot markers (`1..6`) color-coded Red/Amber/Blue at exact water coordinates, and the Spot Features Legend are displayed.

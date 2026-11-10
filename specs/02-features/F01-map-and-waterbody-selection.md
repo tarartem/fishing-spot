@@ -1,53 +1,57 @@
-# F01 — Full-Screen Map, Water Body Pins & Spatial Grid
+# F01 — Full-Screen Map (Satellite / Terrain / Plain), Water Body Pins & Visual Grid
 
 > **Status**: `Approved`  
-> **Module**: `src/modules/map-grid/`
+> **Module**: `src/modules/map-grid/`  
+> **Last Updated**: 2026-11-10
 
 ---
 
 ## 1. User Story
 **As a** guest or registered angler,  
-**I want to** open the app and immediately see an interactive map with named pins over water bodies, click a water body pin to read its basic description, catchable fish species, and community feedback, and (once registered) overlay a tactical spatial grid with exact fishing spots,  
-**So that** I can quickly discover fishing waters and unlock exact grid locations when I sign up.
+**I want to** freely browse an interactive map (switching between **Satellite**, **Terrain**, and **Plain** map views), see water bodies marked with geospatial pins (e.g., around Valencia, Ebro, or Warsaw), click a pin as a guest to read basic info, and as a registered user see the water body overlaid with an `A1–H8` coordinate grid, numbered fishing spot points (`1–6`), and a feature legend,  
+**So that** I can visually locate the exact points on the water body where I should fish.
 
-## 2. UI/UX Layout Specification
-- **Full-Screen Map-First Interface**:
-  - `100vw x 100vh` **MapLibre GL JS** canvas using free **OpenFreeMap / OpenStreetMap** vector tiles.
-  - **Water Body Pins (Visible on Load to All Users)**:
-    - Pre-seeded and indexed water bodies in Poland, Spain, and across Europe are rendered as **named pins** over each water body on the map.
-  - **Floating Top Search & Filter Bar**: Search water bodies by name + "Locate Me" GPS button + Sign In / Register CTA.
-  - **Responsive Contextual Panel (Drawer on Desktop / Bottom Sheet on Mobile)**:
-    - Opens when a user clicks a Water Body Pin on the map.
+## 2. Map Layer Switcher (`Satellite` | `Terrain` | `Plain`)
+The user can switch between three `$0`-cost map styles at any time via a floating map-layer switcher control:
+1. **Satellite (`satellite`)**: High-resolution aerial/satellite imagery (ESRI World Imagery tiles) ideal for inspecting shorelines, submerged points, islands, coves, and vegetation (as shown in the reference screenshots).
+2. **Terrain (`terrain`)**: Topographic & hillshade map (OpenTopoMap / terrain tiles) showing elevation contours, steep banks, and mountain access roads.
+3. **Plain (`plain`)**: Clean vector street/water map (OpenFreeMap Liberty / OpenStreetMap standard view) for clear road and town navigation.
 
-## 3. Water Body Click Behavior: Guest vs. Registered
-1. **Guest User Clicks a Water Body Pin**:
-   - The water body polygon is highlighted on the map.
-   - The side drawer / bottom sheet displays:
-     - **Water Body Name & Type** (`Freshwater` / `Sea`).
-     - **Basic Description & Restriction Summary** (whether fishing is allowed/permit required).
-     - **What Fish You Can Catch Here**: Badges of fish species present in this water body (e.g., Pike, Zander, Perch, Carp).
-     - **Community Feedback Preview**: Rating summary and sample feedback attached to the water body pin.
-     - **Call to Action (CTA)**: *"Want to see the exact fishing spots on our AI Spatial Grid and unlock full community catch reports? Register free with your email."*
-   -*(Note: If a guest clicks an unindexed water body on the map, they can use up to 2 AI basic water-body checks to generate this basic overview, while the spatial grid and exact spots remain locked until registration).*
-2. **Registered User Clicks a Water Body Pin**:
-   - Sees everything above **plus**:
-     - Unlocked **AI Spatial Grid Controls** (Water Type, Fishing Technique, Target Species, Shore/Boat) to generate and view the **Spatial Grid (`A1..H8`)** and **exact Fishing Spot Pins** on the water body.
-     - Immediate access to previously discovered/pre-seeded **exact Fishing Spot Pins** on the grid and all full community reviews & catch photos.
+## 3. Geospatial Water Body Pins (Guest & Registered)
+- Water bodies are marked directly on the MapLibre map at their true `[centerLng, centerLat]` coordinates with interactive map pins showing the water body name and rating.
+- Users can freely pan and zoom around any region—for example, studying the map around **Valencia, Spain** (*Embalse de Cortes de Pallás / Cofrentes*, *Embalse de Tous*, *Embalse de Benagéber*, *Albufera / Cullera*) or **Poland** (*Jezioro Zegrzyńskie*, *Wisła*, *Zatoka Gdańska*)—and click any Water Body Pin on the map.
+- **Guest Click on Water Body Pin**:
+  - Opens the basic water body overview (description, catchable fish species, teaser feedback, and Email Registration Call to Action).
+  - Does **not** display the `A1–H8` grid or the numbered fishing spot markers (`1–6`).
 
-## 4. Adaptive Spatial Grid Sizing (`Turf.js` — Registered Users)
-- **Small/Medium Lakes (`max_dimension < 5km`)**: Generates a labeled grid (`A1..H8`) over the entire water body bounding box.
-- **Large Reservoirs, Long Rivers (e.g. Vistula, Ebro), or Sea Coastlines (`max_dimension >= 5km`)**: Clips the water body polygon to the current map viewport or a `~2.5km` radius tactical sector centered on the water body pin / clicked point so every grid cell stays `100m–300m`.
+## 4. Registered User: On-Map `A1–H8` Grid & Numbered Spot Points (`1–6`)
+When a **Registered User** clicks a Water Body Pin:
+1. **Satellite / Map Framing**: The map flies to frame the water body (or displays the tactical water body grid view).
+2. **8x8 Visual Coordinate Grid (`A1` to `H8`)**:
+   - Columns are labeled **`A` through `H`** (left to right, West to East).
+   - Rows are labeled **`1` through `8`** (top to bottom, North to South):
+     - Row 1: `A1, B1, C1, D1, E1, F1, G1, H1`
+     - Row 2: `A2, B2, C2, D2, E2, F2, G2, H2`
+     - ...
+     - Row 8: `A8, B8, C8, D8, E8, F8, G8, H8`
+   - Each cell displays its label (`A1..H8`) in the top-left corner of the grid square over the satellite/map imagery.
+3. **Numbered Spot Markers (`1` to `6`) & Feature Legend**:
+   - Exact fishing spots are plotted at their true coordinates inside the water body as numbered circular markers (`1`, `2`, `3`, `4`, `5`, `6`), color-coded by spot category:
+     - **Red (`#ef4444`) — Primary Hot Spot (Ranks 1–2)**: High-probability structural ambush points (e.g., submerged islands, main channel rocky points, primary drop-offs).
+     - **Amber / Orange (`#f59e0b`) — Secondary Structure Spot (Ranks 3–4)**: Underwater ledges, secondary points, and transition shelves.
+     - **Blue (`#38bdf8`) — Shore / Cove Access Spot (Ranks 5–6)**: Accessible bank beaches, sheltered coves, inflow mouths, and carp/feeder bays.
+   - A **Spot Features Legend** accompanies the grid, listing each numbered point (`1–6`), its grid cell (`e.g., F6, E2, C7`), structural feature tags, and tactical summary.
 
 ## 5. Acceptance Criteria (Given / When / Then)
-- **AC-F01-1 (Initial Map Load — Named Water Body Pins)**:
-  - *Given* a guest or registered user opens the application,
-  - *When* the map finishes loading,
-  - *Then* named pins are displayed over water bodies in the current map viewport.
-- **AC-F01-2 (Guest Water Body Pin Click)**:
-  - *Given* an unauthenticated guest user clicks a Water Body Pin on the map,
-  - *When* the water body drawer opens,
-  - *Then* it displays the basic description, catchable fish species, teaser feedback, and a registration CTA, while **hiding** the spatial grid (`A1..H8`) and exact fishing spot coordinates.
-- **AC-F01-3 (Registered User Full Grid & Spot Access)**:
-  - *Given* an authenticated registered user clicks a Water Body Pin,
-  - *When* the water body drawer opens,
-  - *Then* they can view the spatial grid, exact fishing spot pins on the grid, full tactical descriptions, and all community reviews/photos.
+- **AC-F01-1 (Map Style Switcher)**:
+  - *Given* any user is viewing the map,
+  - *When* they click `Satellite`, `Terrain`, or `Plain` in the map switcher,
+  - *Then* the map base layer immediately updates to the selected style.
+- **AC-F01-2 (Free Map Browsing with Geospatial Water Body Pins)**:
+  - *Given* a guest user pans/zooms the map (e.g., around Valencia, Spain),
+  - *When* they view the map,
+  - *Then* water bodies are marked with clickable pins on the map, and clicking a pin shows basic water body info, fish species, teaser feedback, and a registration CTA.
+- **AC-F01-3 (Registered User Visual Grid A1–H8, Numbered Points 1–6 & Legend)**:
+  - *Given* a registered user clicks a Water Body Pin,
+  - *When* the water body loads,
+  - *Then* the `A1–H8` grid (columns `A..H`, rows `1..8`), numbered circular spot points (`1..6`) positioned inside the water body, and the Spot Features Legend are displayed.

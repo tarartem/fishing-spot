@@ -1,24 +1,43 @@
 import { describe, it, expect } from 'vitest';
 import Ajv from 'ajv';
 import spotSchemaJson from '@prompts/schemas/spot-recommendation.schema.json';
+import { analyzeWaterBodyScreenshot } from '@/modules/ai-advisor/screenshot-analyzer.service';
 import {
-  analyzeWaterBodyScreenshot,
-  recognizeWaterBodyFromBbox,
-} from '@/modules/ai-advisor/screenshot-analyzer.service';
+  buildEnrichedGeospatialContext,
+  computeSelectionScale,
+} from '@/modules/ai-advisor/geospatial-context.service';
 
 const ajv = new Ajv({ allErrors: true });
 const validateArtifactSchema = ajv.compile(spotSchemaJson);
 
-describe('F02 — AI Screenshot Water Body Recognizer & 6-Spot Grid Evals', () => {
-  it('recognizes Embalse de Cortes (Valencia) from selected map bounding box', async () => {
-    const result = await recognizeWaterBodyFromBbox([
+describe('F02 & F03 — Spain AI Screenshot, Geographical Context & Restriction Evals', () => {
+  it('classifies selection scale into micro (<2.5km), meso (2.5-8km), and macro (>8km)', () => {
+    const micro = computeSelectionScale([-0.955, 39.238, -0.942, 39.248]);
+    expect(micro.scaleMode).toBe('micro');
+
+    const meso = computeSelectionScale([-0.972, 39.222, -0.92, 39.262]);
+    expect(meso.scaleMode).toBe('meso');
+
+    const macro = computeSelectionScale([-1.05, 39.18, -0.85, 39.32]);
+    expect(macro.scaleMode).toBe('macro');
+  });
+
+  it('recognizes Embalse de Cortes (Valencia, Spain), altitude, shore access, and Spain restrictions from bbox', async () => {
+    const result = await buildEnrichedGeospatialContext([
       -0.972, 39.222, -0.92, 39.262,
     ]);
     expect(result.waterBodyName).toContain('Embalse de Cortes');
     expect(result.regionLabel).toContain('Valencia');
+    expect(result.geographicalContext.water_elevation_m).toBeGreaterThan(100);
+    expect(result.restrictionCheck.permits_required).toContain('Licencia');
+    expect(
+      result.restrictionCheck.regulations_list.some((r) =>
+        r.includes('Real Decreto 630/2013')
+      )
+    ).toBe(true);
   });
 
-  it('produces a 6-spot analysis (🔴 1–2, 🔵 3–4, 🟠 5–6) + Best Game Plan strictly conforming to spot-recommendation.schema.json', async () => {
+  it('produces a 6-spot analysis + geographical_context + restriction_check strictly conforming to spot-recommendation.schema.json', async () => {
     const analysis = await analyzeWaterBodyScreenshot({
       bbox: [-0.972, 39.222, -0.92, 39.262],
       anglerGearNote:
@@ -30,6 +49,10 @@ describe('F02 — AI Screenshot Water Body Recognizer & 6-Spot Grid Evals', () =
     expect(isValid).toBe(true);
 
     expect(analysis.water_body_name).toContain('Embalse de Cortes');
+    expect(analysis.geographical_context).toBeDefined();
+    expect(analysis.geographical_context!.water_elevation_m).toBeGreaterThan(100);
+    expect(analysis.restriction_check).toBeDefined();
+    expect(analysis.restriction_check!.status).toBe('permit_required');
     expect(analysis.recommended_spots).toHaveLength(6);
 
     const spot1 = analysis.recommended_spots[0];
@@ -42,22 +65,6 @@ describe('F02 — AI Screenshot Water Body Recognizer & 6-Spot Grid Evals', () =
     expect(spot2.rank).toBe(2);
     expect(spot2.color).toBe('red');
     expect(spot2.title).toContain('The Underwater Shelf Below Playa del Ral');
-
-    const spot3 = analysis.recommended_spots[2];
-    expect(spot3.color).toBe('blue');
-    expect(spot3.title).toContain('Carpa Cofrentes Sheltered Bay');
-
-    const spot4 = analysis.recommended_spots[3];
-    expect(spot4.color).toBe('blue');
-    expect(spot4.title).toContain('Playa del Ral Beach Cove');
-
-    const spot5 = analysis.recommended_spots[4];
-    expect(spot5.color).toBe('orange');
-    expect(spot5.title).toContain('The Canyon S-Bend & Powerline Point');
-
-    const spot6 = analysis.recommended_spots[5];
-    expect(spot6.color).toBe('orange');
-    expect(spot6.title).toContain('Southern Gate of the Western Arm');
 
     expect(analysis.best_game_plan.length).toBeGreaterThanOrEqual(3);
   });

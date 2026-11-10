@@ -101,10 +101,33 @@ export interface GridArtifactSpot {
   how_to_fish?: string;
 }
 
+export type ScaleAnalysisMode = 'micro' | 'meso' | 'macro';
+
+export interface ArtifactGeographicalContext {
+  water_elevation_m: number;
+  relief_range_m: number;
+  scale_mode?: ScaleAnalysisMode;
+  scale_label: string;
+  road_access_summary: string;
+  shore_accessibility_summary: string;
+}
+
+export interface ArtifactRestrictionCheck {
+  status: RestrictionStatus;
+  status_label: string;
+  permits_required: string;
+  prohibited_zones_warning: string;
+  regulations_list: string[];
+  verified_sources: string[];
+  disclaimer: string;
+}
+
 export interface WaterBodyArtifactAnalysis {
   water_body_name: string;
   region_label: string;
   water_body_summary: string;
+  geographical_context?: ArtifactGeographicalContext;
+  restriction_check?: ArtifactRestrictionCheck;
   recommended_spots: GridArtifactSpot[];
   best_game_plan: string[];
 }

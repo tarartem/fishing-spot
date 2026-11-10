@@ -7,6 +7,7 @@ import {
   renderAnnotatedGridScreenshot,
   type CropBoxPixels,
 } from '@/modules/map-grid/screenshot-compositor';
+import { computeSelectionScale } from '@/modules/ai-advisor/geospatial-context.service';
 import type {
   BoundingBox,
   MapStyleMode,
@@ -23,6 +24,12 @@ export default function HomePage() {
   const [activeWaterBody, setActiveWaterBody] =
     useState<WaterBodyPinSummary | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [flyToTarget, setFlyToTarget] = useState<{
+    lng: number;
+    lat: number;
+    zoom?: number;
+    label?: string;
+  } | null>(null);
 
   // Screenshot & AI Artifact Workflow State
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>('map_browse');
@@ -43,10 +50,10 @@ export default function HomePage() {
     UserScreenshotArtifact[]
   >([]);
 
-  // Load curated water bodies on startup & default to Embalse de Cortes (Valencia)
+  // Load curated Spain water bodies in background for fast local recognition
   useEffect(() => {
     async function loadPins() {
-      const res = await fetch('/api/water-bodies/pins');
+      const res = await fetch('/api/water-bodies/pins?countryCode=ES');
       const data = await res.json();
       const pins: WaterBodyPinSummary[] = data.waterBodyPins ?? [];
       setWaterBodyPins(pins);
@@ -56,6 +63,53 @@ export default function HomePage() {
     }
     loadPins();
   }, []);
+
+  // Search any reservoir, river, or town in Spain via OpenStreetMap Nominatim
+  const handleSearchSpainLocation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    // 1. Check local curated Spain water bodies first
+    const localMatch = waterBodyPins.find(
+      (p) =>
+        p.name.toLowerCase().includes(q.toLowerCase()) ||
+        p.regionLabel.toLowerCase().includes(q.toLowerCase())
+    );
+    if (localMatch) {
+      setActiveWaterBody(localMatch);
+      setFlyToTarget({
+        lng: localMatch.centerLng,
+        lat: localMatch.centerLat,
+        zoom: 13.4,
+        label: localMatch.name,
+      });
+      setWorkflowStep('map_browse');
+      return;
+    }
+
+    // 2. Query OpenStreetMap Nominatim (prioritizing Spain `countrycodes=es`)
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=es&q=${encodeURIComponent(q)}&limit=1`
+      );
+      if (res.ok) {
+        const results = await res.json();
+        if (results.length > 0) {
+          const hit = results[0];
+          setFlyToTarget({
+            lng: Number(hit.lon),
+            lat: Number(hit.lat),
+            zoom: 13.5,
+            label: hit.display_name,
+          });
+          setWorkflowStep('map_browse');
+        }
+      }
+    } catch {
+      // Ignore network errors
+    }
+  };
 
   // Step 1: User selects the area on the map -> creates screenshot -> sees screenshot on screen
   const handleCaptureArea = async (params: {
@@ -80,7 +134,7 @@ export default function HomePage() {
     setWorkflowStep('screenshot_preview');
   };
 
-  // Step 2 & 3: User initiates analysis with AI -> AI recognizes water body + image/internet analysis -> User receives annotated screenshot with points 1-6 + summary
+  // Step 2 & 3: User initiates analysis with AI -> AI recognizes water body + geography + Spain restrictions -> User receives annotated screenshot with points 1-6 + summary
   const handleInitiateAiAnalysis = async () => {
     if (!rawScreenshotUrl) return;
     setIsAnalyzing(true);
@@ -105,7 +159,7 @@ export default function HomePage() {
 
       const analysis: WaterBodyArtifactAnalysis = await res.json();
 
-      // Render numbered spot circles (1..6) + A1..H8 grid directly onto the screenshot
+      // Render numbered spot circles (1..6) + A1..H8 grid directly onto the 1024x1024 screenshot
       const annotatedUrl = await renderAnnotatedGridScreenshot({
         rawScreenshotDataUrl: rawScreenshotUrl,
         spots: analysis.recommended_spots,
@@ -143,12 +197,7 @@ export default function HomePage() {
     link.click();
   };
 
-  const filteredPins = waterBodyPins.filter((pin) =>
-    searchQuery.trim()
-      ? pin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        pin.regionLabel.toLowerCase().includes(searchQuery.toLowerCase())
-      : true
-  );
+  const previewScale = computeSelectionScale(selectedBbox);
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -160,25 +209,34 @@ export default function HomePage() {
           </div>
           <div>
             <h1 className="text-sm font-bold text-white leading-tight">
-              Fishing Spot AI
+              Fishing Spot AI · España
             </h1>
             <p className="text-[11px] text-slate-400">
-              Select Water Body on Map · AI Grid Screenshot &amp; Game Plan
+              Select Water Body Area · AI Terrain, Road Access &amp; Spain Coto/Permit Advisor
             </p>
           </div>
         </div>
 
-        {/* Search Bar to Navigate to Water Body */}
-        <div className="flex flex-1 max-w-md items-center gap-2">
+        {/* Search Bar to Navigate to Any Spanish Water Body */}
+        <form
+          onSubmit={handleSearchSpainLocation}
+          className="flex flex-1 max-w-md items-center gap-1.5"
+        >
           <input
             type="search"
             data-testid="water-body-search-input"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Navigate to water body (e.g., Valencia, Cortes, Tous, Mequinenza, Zegrze)..."
+            placeholder="Search Spain water body (e.g., Embalse de Cortes, Tous, Mequinenza, Albufera, Cijara)..."
             className="w-full rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
           />
-        </div>
+          <button
+            type="submit"
+            className="rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-slate-700 transition"
+          >
+            Go
+          </button>
+        </form>
 
         {/* Saved User Artifacts Switcher & Return to Map Button */}
         <div className="flex items-center gap-2">
@@ -225,16 +283,12 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Interactive Map (Satellite / Terrain / Plain) */}
+      {/* Interactive Map (Satellite / Terrain / Plain) — Clean screen without suggested spot chips */}
       <FishingMap
         mapStyle={mapStyle}
         onChangeMapStyle={setMapStyle}
-        waterBodyPins={filteredPins}
         activeWaterBody={activeWaterBody}
-        onNavigateToWaterBody={(pin) => {
-          setActiveWaterBody(pin);
-          setWorkflowStep('map_browse');
-        }}
+        flyToTarget={flyToTarget}
         onCaptureArea={handleCaptureArea}
       />
 
@@ -248,7 +302,7 @@ export default function HomePage() {
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
                 <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-300">
-                  Step 1 Complete · Map Area Captured
+                  Step 1 Complete · Exact Cropped Area (1024×1024 High-DPI)
                 </span>
                 <h2 className="mt-1 text-base font-bold text-white">
                   Selected Water Body Screenshot Preview
@@ -259,8 +313,25 @@ export default function HomePage() {
                 onClick={() => setWorkflowStep('map_browse')}
                 className="rounded-lg border border-slate-700 px-2.5 py-1 text-xs text-slate-300 hover:bg-slate-800"
               >
-                ✕ Retake on Map
+                ✕ Retake Selection
               </button>
+            </div>
+
+            {/* Area Span & Scale Quality Guidance Banner */}
+            <div
+              data-testid="selection-scale-banner"
+              className={`rounded-xl border px-3.5 py-2 text-xs ${
+                previewScale.scaleMode === 'macro'
+                  ? 'border-amber-400/50 bg-amber-950/40 text-amber-200'
+                  : 'border-emerald-500/40 bg-emerald-950/30 text-emerald-200'
+              }`}
+            >
+              <div className="font-bold">📐 {previewScale.scaleLabel}</div>
+              <p className="mt-0.5 text-[11px] text-slate-300">
+                {previewScale.scaleMode === 'macro'
+                  ? 'You selected a wider area (>8 km). The AI will judge macro river channel bends, large peninsulas, and bay mouths. For finer bank/ledge detail, you can zoom in or drag a tighter box.'
+                  : 'High-resolution capture ready: AI will inspect underwater shelf color breaks, elevation slope, road access, and Spain fishing regulations for this exact sector.'}
+              </p>
             </div>
 
             {/* Captured Screenshot with A1–H8 Grid Preview */}
@@ -269,7 +340,7 @@ export default function HomePage() {
                 src={griddedPreviewUrl || rawScreenshotUrl}
                 alt="Selected Water Body Screenshot"
                 data-testid="captured-screenshot-preview"
-                className="max-h-[380px] w-auto rounded-xl border-2 border-slate-700 shadow-lg"
+                className="max-h-[360px] w-auto rounded-xl border-2 border-slate-700 shadow-lg"
               />
             </div>
 
@@ -303,7 +374,7 @@ export default function HomePage() {
                 className="rounded-xl bg-emerald-500 px-6 py-2.5 text-sm font-extrabold text-slate-950 shadow-lg shadow-emerald-950/60 transition hover:bg-emerald-400 disabled:opacity-50"
               >
                 {isAnalyzing
-                  ? '🔍 AI Recognizing Water Body & Analyzing Grid...'
+                  ? '🔍 AI Analyzing Terrain, Altitude, Roads & Spain Regulations...'
                   : '🤖 Analyze with AI'}
               </button>
             </div>
@@ -311,7 +382,7 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* STEP 3, 5 & 6 VIEW: User's Annotated Screenshot Artifact + Tactical Summary & Best Game Plan */}
+      {/* STEP 3, 5 & 6 VIEW: User's Annotated Screenshot Artifact + Geography + Spain Regulations + Tactical Summary */}
       {workflowStep === 'artifact_ready' && currentArtifact && (
         <section
           data-testid="user-artifact-view"
@@ -357,10 +428,10 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Two-Column Artifact Layout: Left = Annotated Screenshot with Points 1–6 & A1–H8 Grid; Right = 🎯 Where to Fish on the Grid + 🚗 Best Game Plan */}
+            {/* Two-Column Artifact Layout */}
             <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-12">
-              {/* Left Column: Annotated Screenshot Artifact */}
-              <div className="lg:col-span-5 flex flex-col items-center space-y-3">
+              {/* Left Column: Annotated Screenshot Artifact + Geography & Spain Regulations Cards */}
+              <div className="lg:col-span-5 flex flex-col space-y-3">
                 <div className="overflow-hidden rounded-2xl border-2 border-slate-700 bg-slate-950 shadow-2xl">
                   <img
                     src={currentArtifact.annotatedScreenshotDataUrl}
@@ -369,6 +440,8 @@ export default function HomePage() {
                     className="w-full h-auto object-contain"
                   />
                 </div>
+
+                {/* Grid Legend */}
                 <div className="w-full rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-300 space-y-1">
                   <p className="font-bold text-slate-200">
                     📌 Grid Screenshot Legend:
@@ -380,7 +453,7 @@ export default function HomePage() {
                     </span>
                     <span className="flex items-center gap-1.5">
                       <span className="inline-block h-3 w-3 rounded-full bg-[#29b6f6]" />
-                      <strong>🔵 3–4:</strong> Sheltered Bay / Beach Access
+                      <strong>🔵 3–4:</strong> Sheltered Bay / Road Access
                     </span>
                     <span className="flex items-center gap-1.5">
                       <span className="inline-block h-3 w-3 rounded-full bg-[#f59e0b]" />
@@ -388,10 +461,68 @@ export default function HomePage() {
                     </span>
                   </div>
                 </div>
+
+                {/* ⛰️ Geographical Features: Altitude, Road Availability & Shore Accessibility */}
+                {currentArtifact.analysis.geographical_context && (
+                  <div
+                    data-testid="geographical-context-card"
+                    className="w-full rounded-xl border border-sky-500/40 bg-sky-950/25 p-3.5 text-xs space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-extrabold text-sky-300">
+                        ⛰️ Geography, Altitude &amp; Shore Access
+                      </h3>
+                      <span className="rounded bg-sky-500/20 px-2 py-0.5 font-mono text-[11px] font-bold text-sky-200">
+                        {currentArtifact.analysis.geographical_context.water_elevation_m}m ASL (Δ+{currentArtifact.analysis.geographical_context.relief_range_m}m)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-200">
+                      <strong className="text-sky-200">🛣️ Road Access:</strong>{' '}
+                      {currentArtifact.analysis.geographical_context.road_access_summary}
+                    </p>
+                    <p className="text-[11px] text-slate-200">
+                      <strong className="text-sky-200">🥾 Shore Steepness:</strong>{' '}
+                      {currentArtifact.analysis.geographical_context.shore_accessibility_summary}
+                    </p>
+                  </div>
+                )}
+
+                {/* ⚖️ Spain Fishing Regulations & Restricted Area Lookup */}
+                {currentArtifact.analysis.restriction_check && (
+                  <div
+                    data-testid="restriction-check-card"
+                    className="w-full rounded-xl border border-amber-500/40 bg-amber-950/25 p-3.5 text-xs space-y-2"
+                  >
+                    <h3 className="font-extrabold text-amber-300">
+                      ⚖️ Spain Fishing Regulations &amp; Restrictions Check
+                    </h3>
+                    <div className="rounded-lg bg-slate-950/80 px-2.5 py-1.5 font-bold text-amber-200 text-[11px]">
+                      {currentArtifact.analysis.restriction_check.status_label}
+                    </div>
+                    <p className="text-[11px] text-slate-200">
+                      <strong className="text-amber-200">🪪 Permits:</strong>{' '}
+                      {currentArtifact.analysis.restriction_check.permits_required}
+                    </p>
+                    <p className="text-[11px] text-rose-200">
+                      <strong className="text-rose-300">🚫 Restricted / Safety Zones:</strong>{' '}
+                      {currentArtifact.analysis.restriction_check.prohibited_zones_warning}
+                    </p>
+                    <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-300">
+                      {currentArtifact.analysis.restriction_check.regulations_list.map(
+                        (rule, idx) => (
+                          <li key={idx}>{rule}</li>
+                        )
+                      )}
+                    </ul>
+                    <p className="text-[10px] text-slate-400 italic border-t border-slate-800 pt-1.5">
+                      {currentArtifact.analysis.restriction_check.disclaimer}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Right Column: Tactical Summary (🎯 Where to Fish on the Grid + 🚗 Best Game Plan) */}
-              <div className="lg:col-span-7 space-y-5 max-h-[72vh] overflow-y-auto pr-1">
+              <div className="lg:col-span-7 space-y-5 max-h-[78vh] overflow-y-auto pr-1">
                 <div data-testid="where-to-fish-summary" className="space-y-4">
                   <h3 className="text-base font-extrabold text-white">
                     🎯 Where to Fish on the Grid:

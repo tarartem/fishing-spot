@@ -33,7 +33,7 @@ export async function captureMapAreaScreenshot(params: {
   mapStyle: MapStyleMode;
   waterBodyLabel?: string;
 }): Promise<string> {
-  const targetSize = 760;
+  const targetSize = 1024;
   const outCanvas = document.createElement('canvas');
   outCanvas.width = targetSize;
   outCanvas.height = targetSize;
@@ -276,7 +276,7 @@ export async function renderAnnotatedGridScreenshot(params: {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
-      const size = 760;
+      const size = 1024;
       const canvas = document.createElement('canvas');
       canvas.width = size;
       canvas.height = size;

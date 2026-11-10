@@ -12,9 +12,8 @@ import type { CropBoxPixels } from '@/modules/map-grid/screenshot-compositor';
 interface FishingMapProps {
   mapStyle: MapStyleMode;
   onChangeMapStyle: (style: MapStyleMode) => void;
-  waterBodyPins: WaterBodyPinSummary[];
   activeWaterBody: WaterBodyPinSummary | null;
-  onNavigateToWaterBody: (pin: WaterBodyPinSummary) => void;
+  flyToTarget?: { lng: number; lat: number; zoom?: number; label?: string } | null;
   onCaptureArea: (params: {
     canvas: HTMLCanvasElement | null;
     cropBox: CropBoxPixels | null;
@@ -77,12 +76,12 @@ function getMapStyleConfig(mode: MapStyleMode): string | StyleSpecification {
 export function FishingMap({
   mapStyle,
   onChangeMapStyle,
-  waterBodyPins,
   activeWaterBody,
-  onNavigateToWaterBody,
+  flyToTarget,
   onCaptureArea,
 }: FishingMapProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const reticleRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
   const [isDragSelectMode, setIsDragSelectMode] = useState(false);
@@ -91,7 +90,7 @@ export function FishingMap({
   );
   const [cropBox, setCropBox] = useState<CropBoxPixels | null>(null);
 
-  // Initialize MapLibre GL JS with preserveDrawingBuffer: true so canvas screenshots work natively
+  // Initialize MapLibre GL JS centered in Spain (Embalse de Cortes, Valencia) with preserveDrawingBuffer: true
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
@@ -99,7 +98,7 @@ export function FishingMap({
       const map = new maplibregl.Map({
         container: mapContainerRef.current,
         style: getMapStyleConfig(mapStyle),
-        center: [-0.946, 39.242], // Embalse de Cortes (Cofrentes — Valencia)
+        center: [-0.946, 39.242], // Spain default view (Valencia interior reservoirs)
         zoom: 13.2,
         canvasContextAttributes: { preserveDrawingBuffer: true },
         attributionControl: false,
@@ -133,19 +132,38 @@ export function FishingMap({
     }
   }, [mapStyle]);
 
-  // Fly to selected water body when user navigates to it
+  // Fly to searched location in Spain when user selects a search result
   useEffect(() => {
-    if (!mapRef.current || !activeWaterBody) return;
+    if (!mapRef.current || !flyToTarget) return;
     try {
       mapRef.current.flyTo({
-        center: [activeWaterBody.centerLng, activeWaterBody.centerLat],
-        zoom: 13.4,
-        duration: 850,
+        center: [flyToTarget.lng, flyToTarget.lat],
+        zoom: flyToTarget.zoom ?? 13.5,
+        duration: 900,
       });
     } catch {
       // Ignore in headless environment
     }
-  }, [activeWaterBody]);
+  }, [flyToTarget]);
+
+  /**
+   * Computes the pixel rectangle of the on-screen framing reticle relative to the map container
+   * so that 1-click capture crops the exact framed square rather than the full wide viewport.
+   */
+  const getReticleCropBox = (): CropBoxPixels | null => {
+    if (!mapContainerRef.current || !reticleRef.current) return null;
+    const mapRect = mapContainerRef.current.getBoundingClientRect();
+    const retRect = reticleRef.current.getBoundingClientRect();
+    if (retRect.width > 40 && retRect.height > 40) {
+      return {
+        x: Math.max(0, retRect.left - mapRect.left),
+        y: Math.max(0, retRect.top - mapRect.top),
+        width: Math.min(mapRect.width, retRect.width),
+        height: Math.min(mapRect.height, retRect.height),
+      };
+    }
+    return null;
+  };
 
   const resolveCurrentBbox = (customCrop?: CropBoxPixels | null): BoundingBox => {
     if (mapRef.current) {
@@ -169,12 +187,12 @@ export function FishingMap({
         // Fallback below
       }
     }
-    if (activeWaterBody) {
+    if (flyToTarget) {
       return [
-        activeWaterBody.centerLng - 0.025,
-        activeWaterBody.centerLat - 0.02,
-        activeWaterBody.centerLng + 0.025,
-        activeWaterBody.centerLat + 0.02,
+        flyToTarget.lng - 0.022,
+        flyToTarget.lat - 0.018,
+        flyToTarget.lng + 0.022,
+        flyToTarget.lat + 0.018,
       ];
     }
     return [-0.972, 39.222, -0.92, 39.262];
@@ -182,10 +200,11 @@ export function FishingMap({
 
   const triggerScreenshotCapture = (customCrop: CropBoxPixels | null) => {
     const canvas = mapRef.current?.getCanvas() ?? null;
-    const bbox = resolveCurrentBbox(customCrop);
+    const effectiveCrop = customCrop ?? getReticleCropBox();
+    const bbox = resolveCurrentBbox(effectiveCrop);
     onCaptureArea({
       canvas,
-      cropBox: customCrop,
+      cropBox: effectiveCrop,
       bbox,
       waterBodyHint: activeWaterBody,
     });
@@ -232,7 +251,7 @@ export function FishingMap({
         data-testid="map-canvas"
       />
 
-      {/* Optional Drag-to-Select Crop Overlay */}
+      {/* Manual Drag-to-Select Crop Overlay */}
       {isDragSelectMode && (
         <div
           data-testid="drag-select-overlay"
@@ -242,7 +261,7 @@ export function FishingMap({
           className="absolute inset-0 z-10 cursor-crosshair bg-slate-950/25"
         >
           <div className="pointer-events-none absolute top-24 left-1/2 -translate-x-1/2 rounded-full border border-amber-400 bg-slate-950/90 px-4 py-1.5 text-xs font-bold text-amber-300 shadow-xl">
-            Drag a box over the water body to capture your screenshot
+            ✂️ Drag a box directly over the water body sector you want to analyze
           </div>
           {cropBox && cropBox.width > 5 && (
             <div
@@ -258,110 +277,81 @@ export function FishingMap({
         </div>
       )}
 
-      {/* Visual Framing Reticle on Map */}
+      {/* Visual Framing Reticle on Map (Exact 1:1 Crop Target) */}
       {!isDragSelectMode && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-[64vh] w-[64vh] max-w-[85vw] max-h-[65vw] rounded-2xl border-2 border-dashed border-white/35 shadow-[0_0_0_9999px_rgba(2,6,23,0.18)] flex flex-col justify-between p-3">
-            <div className="flex items-center justify-between text-[11px] font-mono text-amber-300/90 bg-slate-950/70 px-2.5 py-1 rounded-lg self-start">
-              <span>
-                🎯 Target Area:{' '}
-                {activeWaterBody?.name ?? 'Embalse de Cortes (Valencia)'}
-              </span>
-            </div>
-            <div className="text-[11px] text-slate-200/90 bg-slate-950/70 px-2.5 py-1 rounded-lg self-center">
-              Pan/zoom map to frame water body, then click &ldquo;Select Area &amp; Create Screenshot&rdquo;
+          <div
+            ref={reticleRef}
+            data-testid="target-reticle-box"
+            className="h-[64vh] w-[64vh] max-w-[85vw] max-h-[65vw] rounded-2xl border-2 border-dashed border-white/35 shadow-[0_0_0_9999px_rgba(2,6,23,0.22)] flex flex-col justify-end p-3"
+          >
+            <div className="text-[11px] text-slate-200/90 bg-slate-950/75 px-3 py-1 rounded-lg self-center text-center">
+              Frame water body inside box or use <strong>✂️ Select Area (Drag Box)</strong> for exact sector crop
             </div>
           </div>
         </div>
       )}
 
-      {/* Floating Map Controls: Layer Switcher + Quick Water Body Navigator + Area Capture Action */}
+      {/* Clean Floating Map Controls: Map Style Switcher (Top-Left) + Area Selection Bar (Bottom-Center) */}
       <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-4 pt-20">
-        {/* Top Controls: Map Layer Switcher (Satellite | Terrain | Plain) + Quick Water Body Selector */}
-        <div className="flex flex-col gap-2.5 max-w-4xl">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Map Style Switcher */}
-            <div
-              data-testid="map-style-switcher"
-              className="pointer-events-auto inline-flex items-center rounded-xl border border-slate-700/90 bg-slate-950/90 p-1 shadow-xl backdrop-blur-md"
-            >
-              {(
-                [
-                  { id: 'satellite', label: '🛰️ Satellite' },
-                  { id: 'terrain', label: '⛰️ Terrain' },
-                  { id: 'plain', label: '🗺️ Plain Map' },
-                ] as const
-              ).map((mode) => (
-                <button
-                  key={mode.id}
-                  type="button"
-                  data-testid={`map-style-${mode.id}`}
-                  onClick={() => onChangeMapStyle(mode.id)}
-                  className={`rounded-lg px-3 py-1 text-xs font-bold transition ${
-                    mapStyle === mode.id
-                      ? 'bg-emerald-500 text-slate-950 shadow'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
-                  {mode.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Water Bodies Quick Navigation Bar */}
+        {/* Top Controls: Map Layer Switcher (Satellite | Terrain | Plain) — No suggested spot chips */}
+        <div className="flex items-center gap-2">
           <div
-            className="pointer-events-auto flex flex-wrap gap-1.5"
-            data-testid="water-body-pins-layer"
+            data-testid="map-style-switcher"
+            className="pointer-events-auto inline-flex items-center rounded-xl border border-slate-700/90 bg-slate-950/90 p-1 shadow-xl backdrop-blur-md"
           >
-            {waterBodyPins.map((pin) => {
-              const isSelected = activeWaterBody?.id === pin.id;
-              return (
-                <button
-                  key={pin.id}
-                  type="button"
-                  data-testid={`water-body-pin-${pin.id}`}
-                  onClick={() => onNavigateToWaterBody(pin)}
-                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold shadow-lg backdrop-blur-md transition ${
-                    isSelected
-                      ? 'border-emerald-400 bg-emerald-950/95 text-emerald-200 ring-2 ring-emerald-400/50'
-                      : 'border-slate-700/80 bg-slate-900/90 text-slate-200 hover:border-emerald-500/70 hover:bg-slate-800/95'
-                  }`}
-                >
-                  <span>📍</span>
-                  <span>{pin.name}</span>
-                  <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">
-                    {pin.countryCode}
-                  </span>
-                </button>
-              );
-            })}
+            {(
+              [
+                { id: 'satellite', label: '🛰️ Satellite' },
+                { id: 'terrain', label: '⛰️ Terrain' },
+                { id: 'plain', label: '🗺️ Plain Map' },
+              ] as const
+            ).map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                data-testid={`map-style-${mode.id}`}
+                onClick={() => onChangeMapStyle(mode.id)}
+                className={`rounded-lg px-3 py-1 text-xs font-bold transition ${
+                  mapStyle === mode.id
+                    ? 'bg-emerald-500 text-slate-950 shadow'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                {mode.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Bottom Center Action Bar: Select Area on Map (Create Screenshot) */}
+        {/* Bottom Center Action Bar: Exact Area Selection */}
         <div className="pointer-events-auto mb-2 flex flex-wrap items-center justify-center gap-3 self-center rounded-2xl border border-emerald-500/50 bg-slate-950/90 px-4 py-3 shadow-2xl backdrop-blur-xl">
-          <button
-            type="button"
-            data-testid="capture-map-area-button"
-            onClick={() => triggerScreenshotCapture(null)}
-            className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-extrabold text-slate-950 shadow-lg shadow-emerald-950/60 transition hover:bg-emerald-400"
-          >
-            <span>📸</span>
-            <span>Select Area &amp; Create Screenshot</span>
-          </button>
-
           <button
             type="button"
             data-testid="toggle-drag-select-button"
             onClick={() => setIsDragSelectMode((prev) => !prev)}
-            className={`rounded-xl border px-3.5 py-2.5 text-xs font-bold transition ${
+            className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-extrabold shadow-lg transition ${
               isDragSelectMode
-                ? 'border-amber-400 bg-amber-500/20 text-amber-200'
-                : 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500'
+                ? 'border border-amber-400 bg-amber-500 text-slate-950'
+                : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-emerald-950/60'
             }`}
           >
-            {isDragSelectMode ? '✕ Cancel Drag Box' : '✂️ Or Drag Box on Map'}
+            <span>{isDragSelectMode ? '✕' : '✂️'}</span>
+            <span>
+              {isDragSelectMode
+                ? 'Cancel Drag Selection'
+                : 'Select Area on Map (Drag Box)'}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="capture-map-area-button"
+            onClick={() => triggerScreenshotCapture(null)}
+            className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs font-bold text-slate-200 transition hover:border-emerald-400 hover:text-white"
+          >
+            <span>📸</span>
+            <span>Capture Framed Box</span>
           </button>
         </div>
       </div>

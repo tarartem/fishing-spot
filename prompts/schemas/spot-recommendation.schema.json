@@ -6,6 +6,8 @@
     "water_body_name",
     "region_label",
     "water_body_summary",
+    "geographical_context",
+    "restriction_check",
     "recommended_spots",
     "best_game_plan"
   ],
@@ -16,11 +18,58 @@
     },
     "region_label": {
       "type": "string",
-      "description": "Region and country of the water body."
+      "description": "Municipality, Autonomous Community, and country (Spain)."
     },
     "water_body_summary": {
       "type": "string",
-      "description": "Brief overview of the water body and target species."
+      "description": "Overview of the water body, scale of analysis, and target species."
+    },
+    "geographical_context": {
+      "type": "object",
+      "required": [
+        "water_elevation_m",
+        "relief_range_m",
+        "scale_label",
+        "road_access_summary",
+        "shore_accessibility_summary"
+      ],
+      "properties": {
+        "water_elevation_m": { "type": "number" },
+        "relief_range_m": { "type": "number" },
+        "scale_label": { "type": "string" },
+        "road_access_summary": { "type": "string" },
+        "shore_accessibility_summary": { "type": "string" }
+      }
+    },
+    "restriction_check": {
+      "type": "object",
+      "required": [
+        "status",
+        "status_label",
+        "permits_required",
+        "prohibited_zones_warning",
+        "regulations_list",
+        "verified_sources",
+        "disclaimer"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["allowed", "permit_required", "seasonal_restriction", "prohibited"]
+        },
+        "status_label": { "type": "string" },
+        "permits_required": { "type": "string" },
+        "prohibited_zones_warning": { "type": "string" },
+        "regulations_list": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "verified_sources": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "disclaimer": { "type": "string" }
+      }
     },
     "recommended_spots": {
       "type": "array",
@@ -48,25 +97,17 @@
             "pattern": "^[A-H][1-8]$"
           },
           "grid_cells_label": {
-            "type": "string",
-            "description": "e.g. 'Grid E6 / F6' or 'Grid E4'"
+            "type": "string"
           },
           "badge": {
-            "type": "string",
-            "description": "Optional trophy badge for top spots, e.g. '🏆 (The #1 Trophy Point)'"
+            "type": "string"
           },
           "title": { "type": "string" },
           "x_percent": { "type": "number", "minimum": 2, "maximum": 98 },
           "y_percent": { "type": "number", "minimum": 2, "maximum": 98 },
-          "why_label": {
-            "type": "string",
-            "description": "e.g. 'Why it\\'s #1:', 'Why it\\'s incredible:', or 'Why it\\'s great:'"
-          },
+          "why_label": { "type": "string" },
           "why_this_spot": { "type": "string" },
-          "secondary_label": {
-            "type": "string",
-            "description": "Optional e.g. 'The Terrain:' or 'Why fish love it:'"
-          },
+          "secondary_label": { "type": "string" },
           "secondary_text": { "type": "string" },
           "how_to_fish": { "type": "string" }
         }

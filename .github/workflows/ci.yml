@@ -1,0 +1,22 @@
+name: CI — Spec, Lint & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify SDD Required Structure
+        run: |
+          test -f AGENTS.md
+          test -f specs/00-product-vision.md
+          test -f specs/01-domain-and-rules.md
+          test -f prompts/schemas/spot-recommendation.schema.json
+          echo "Agent-First & SDD structure verified."

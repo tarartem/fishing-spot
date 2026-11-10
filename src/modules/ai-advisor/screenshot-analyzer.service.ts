@@ -210,6 +210,7 @@ Return ONLY valid JSON with this exact structure:
           config: {
             responseMimeType: 'application/json',
             temperature: 0.3,
+            abortSignal: AbortSignal.timeout(15000),
           },
         });
 

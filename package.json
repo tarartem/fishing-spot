@@ -1,0 +1,51 @@
+{
+  "name": "fishing-spot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Fishing Spot Advisor & Angler Community ($0 MVP, Agent-First SDD)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.49.1",
+    "@turf/bbox": "^7.2.0",
+    "@turf/boolean-intersects": "^7.2.0",
+    "@turf/boolean-point-in-polygon": "^7.2.0",
+    "@turf/circle": "^7.2.0",
+    "@turf/distance": "^7.2.0",
+    "@turf/helpers": "^7.2.0",
+    "@turf/square-grid": "^7.2.0",
+    "ajv": "^8.17.1",
+    "drizzle-orm": "^0.40.0",
+    "lucide-react": "^0.487.0",
+    "maplibre-gl": "^5.2.0",
+    "next": "^15.2.4",
+    "postgres": "^3.4.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.1",
+    "@tailwindcss/postcss": "^4.0.17",
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^22.13.14",
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.4",
+    "drizzle-kit": "^0.30.5",
+    "tailwindcss": "^4.0.17",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
+  }
+}

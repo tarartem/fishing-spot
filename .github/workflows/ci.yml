@@ -1,4 +1,4 @@
-name: CI — Spec, Lint & Test
+name: CI — Spec, Typecheck, Test & Build
 
 on:
   push:
@@ -13,10 +13,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
       - name: Verify SDD Required Structure
         run: |
           test -f AGENTS.md
           test -f specs/00-product-vision.md
           test -f specs/01-domain-and-rules.md
           test -f prompts/schemas/spot-recommendation.schema.json
-          echo "Agent-First & SDD structure verified."
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript Typecheck
+        run: npm run typecheck
+
+      - name: Run Unit, Integration & AI Schema Eval Tests
+        run: npm run test
+
+      - name: Verify Production Build
+        run: npm run build

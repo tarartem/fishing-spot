@@ -13,6 +13,7 @@ erDiagram
     USERS ||--o{ RESTRICTION_ZONES : reports
     WATER_BODIES ||--o{ GRID_ANALYSES : has
     WATER_BODIES ||--o{ FISHING_SPOTS : contains
+    WATER_BODIES ||--o{ SPOT_REVIEWS : receives_feedback
     WATER_BODIES ||--o{ RESTRICTION_ZONES : regulates
     GRID_ANALYSES ||--o{ FISHING_SPOTS : generates
     GRID_ANALYSES ||--o{ CELL_MICRO_ANALYSES : drills_into
@@ -30,12 +31,17 @@ erDiagram
     WATER_BODIES {
         uuid id PK
         string osm_id UK
-        string name
+        string name "Displayed on the map Water Body Pin"
         string water_type "freshwater | sea"
         string country_code "PL | ES | EU ISO-2"
-        text description "General water body overview shown on click"
+        float center_lat "Latitude for the Water Body Pin on map load"
+        float center_lng "Longitude for the Water Body Pin on map load"
+        text description "Basic water body description shown on click"
+        jsonb common_species "Array of fish species catchable in this water body"
         jsonb bbox "[minLng, minLat, maxLng, maxLat]"
         geometry polygon "PostGIS Polygon/MultiPolygon"
+        float avg_rating
+        int review_count
         timestamp created_at
     }
 
@@ -77,7 +83,7 @@ erDiagram
     FISHING_SPOTS {
         uuid id PK
         uuid water_body_id FK
-        uuid grid_analysis_id FK "Nullable for community-created/pre-seeded pins"
+        uuid grid_analysis_id FK "Nullable for pre-seeded grid pins"
         string cell_id "e.g., C4"
         float latitude
         float longitude
@@ -88,7 +94,6 @@ erDiagram
         string fishing_type
         string access_mode "shore | boat"
         string restriction_status
-        boolean is_pre_seeded "True for pre-seeded/verified pins visible on click to registered users"
         float avg_rating
         int review_count
         timestamp created_at
@@ -96,7 +101,8 @@ erDiagram
 
     SPOT_REVIEWS {
         uuid id PK
-        uuid spot_id FK
+        uuid water_body_id FK "Always linked to the Water Body Pin"
+        uuid spot_id FK "Optional specific grid spot pin"
         uuid user_id FK
         int rating "1 to 5"
         text comment
@@ -117,8 +123,7 @@ erDiagram
 ```
 
 ## 2. Indexing & Performance Strategy ($0 Tier)
-- `idx_water_bodies_osm_id`: Instant lookup when a user clicks an already-indexed OSM water body.
-- `idx_water_bodies_polygon_gist`: PostGIS `GIST` index for point-in-polygon resolution on map clicks.
+- `idx_water_bodies_center`: Fast bounding-box retrieval of named **Water Body Pins** (`center_lat`, `center_lng`, `name`) when the map loads or pans.
+- `idx_water_bodies_osm_id`: Instant lookup for OSM water bodies.
 - `idx_grid_analyses_query_hash`: `O(1)` cache hit for repeated AI grid queries (`0` LLM tokens spent).
-- `idx_cell_micro_analyses_unique`: Unique index on `(grid_analysis_id, cell_id)` to cache single-cell deep-dives.
-- `idx_fishing_spots_water_body`: Fast retrieval of all pre-seeded and AI-generated spot pins when a registered user clicks a water body.
+- `idx_fishing_spots_water_body`: Fast retrieval of exact grid spot pins for **registered users**.

@@ -1,4 +1,4 @@
-# F04 — Water Body Pin Reviews, Feedback & Catch Photos
+# F04 — Water Body Feedback, Spot Reviews & Catch Photos
 
 > **Status**: `Approved`  
 > **Module**: `src/modules/reviews/`
@@ -6,41 +6,24 @@
 ---
 
 ## 1. User Story
-**As a** registered angler,  
-**I want to** click a water body to see pre-seeded/existing spot pins and community reviews, and attach my own review, feedback, and catch photos to a water body pin,  
-**So that** the community shares verified fishing results and the AI assistant incorporates real catch history into future recommendations.
+**As a** guest user, **I want to** see some teaser community feedback when I click a Water Body Pin so I know the water body is active; and **as a** registered angler, **I want to** read all reviews/photos and leave my own review, feedback, and catch photos on the water body and its spots,  
+**So that** anglers can share real fishing results.
 
 ## 2. Functional Requirements
-1. **Attaching Reviews to Water Body Pins**:
-   - Every review is linked to a **Water Body Pin (`fishing_spots` record)** on a specific water body and grid cell (`cell_id`).
-   - Registered anglers can:
-     - **Review an Existing Pin**: Click any AI-generated or pre-seeded spot pin on the water body and click **"Add Review & Catch Photo"**.
-     - **Drop a New Spot Pin on the Water Body**: Click a water/shoreline cell where they fished to create a community spot pin and attach their review + photo.
-2. **Visibility Rules (Registered Only)**:
-   - Pre-seeded/existing spot pins and their reviews/photos are **visible exclusively to registered users** (Email auth).
-   - Guests clicking a water body do not see pre-seeded spot pins or community reviews until they register.
-3. **Review & Catch Payload**:
-   - `rating`: 1 to 5 stars (`integer`).
-   - `comment`: Text feedback on spot conditions, structure, bait/lure used, and bank access.
-   - `fishing_type_used`: Technique used (`spinning`, `feeder_bottom`, `carp`, `float`, `fly`, `surfcasting`).
-   - `species_caught`: List of `{ species, count, length_cm, weight_kg }`.
-   - `fished_on`: Date of the session.
-4. **Zero-Cost Client-Side Photo Compression**:
-   - Up to 3 photos per review (`catch`, `spot_view`, `regulation_sign`).
-   - Before upload, the browser resizes images to max `1280px` dimension and compresses to **WebP (`<= 200KB`)**, uploading to **Supabase Storage** (`catch-photos` bucket).
-5. **AI Prompt Enrichment Loop**:
-   - Aggregated review ratings and top species caught per grid cell (`cell_id`) on a water body are summarized and injected into `spot-finder-grid.prompt.md` (`community_reviews_summary`) when new AI analyses are generated.
+1. **Attaching Reviews & Feedback to Water Body Pins**:
+   - Reviews are linked to the **Water Body (`water_body_id`)** and optionally to a specific **Grid Spot (`spot_id` / `cell_id`)**.
+2. **Tiered Visibility (Guest Teaser vs. Registered Full Access)**:
+   - **Guest Users**: When clicking a Water Body Pin on the map, guests see the water body's **average star rating**, **total review count**, and **1–2 short teaser feedback snippets** (without exact grid spot coordinates or full catch photo galleries), paired with the **Call to Action to register**.
+   - **Registered Users**: See **all** community reviews, exact grid spot associations, full catch logs (species, weight, length, bait/technique used), and the full catch photo gallery, and can submit new reviews and photos.
+3. **Zero-Cost Client-Side Photo Compression**:
+   - Registered anglers can upload 1–3 photos per review, compressed client-side to **WebP (`<= 200KB`, max `1280px`)** and stored in **Supabase Storage**.
 
 ## 3. Acceptance Criteria (Given / When / Then)
-- **AC-F04-1 (Pre-Seeded Spots Visible on Water Body Click for Registered Users)**:
-  - *Given* a registered user clicks a water body on the map,
-  - *When* the water body loads,
-  - *Then* all pre-seeded and previously created spot pins on that water body are immediately rendered on the map with their average star rating and review count.
-- **AC-F04-2 (Submit Review & Compressed Catch Photo)**:
-  - *Given* a registered user selects a spot pin on a water body,
-  - *When* they submit a 1–5 rating, feedback text, species caught, and a photo,
-  - *Then* the client compresses the photo to WebP (`<= 200KB`), uploads it to Supabase Storage, saves the review via Drizzle ORM, and updates the spot pin's `avg_rating` and `review_count`.
-- **AC-F04-3 (Guest Review Gating)**:
-  - *Given* an unauthenticated guest user,
-  - *When* they request water body details or attempt to post/view spot reviews,
-  - *Then* pre-seeded spots and reviews are withheld and the UI prompts free Email registration.
+- **AC-F04-1 (Guest Teaser Feedback on Water Body Pin)**:
+  - *Given* a water body has community reviews,
+  - *When* a guest clicks the Water Body Pin,
+  - *Then* they see the basic water body description, catchable fish species, aggregate rating + teaser feedback text, and a CTA to register for full access.
+- **AC-F04-2 (Registered User Full Reviews & Photo Upload)**:
+  - *Given* a registered user views a water body or spot,
+  - *When* they browse or submit a review with a catch photo,
+  - *Then* they have full read/write access to all reviews, spot pins, and compressed WebP catch photos.

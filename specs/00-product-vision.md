@@ -22,16 +22,19 @@ Anglers exploring a water body (lake, river, reservoir, or coastal shoreline) st
 
 ---
 
-## 3. User Tiers: Guest vs. Registered Angler
+## 3. Core User Journey: Guest vs. Registered Angler
 
-| Capability | Guest (Unauthenticated) | Registered Angler (Email Auth) |
+> [!IMPORTANT]
+> There is a clear two-level pin hierarchy on the map:
+> 1. **Water Body Pins (Level 1 — Visible to Everyone)**: Pins placed over water bodies showing their names.
+> 2. **Grid Fishing Spot Pins (Level 2 — Registered Users Only)**: The spatial grid (`A1..H8`) and exact fishing spot pins inside the water body showing where to catch fish.
+
+| Stage / Capability | Guest User (Unauthenticated) | Registered Angler (Email Auth) |
 | :--- | :--- | :--- |
-| **Authentication Method** | Anonymous session (Cookie / IP rate-limited) | **Email Registration** (Supabase Email/Password or Magic Link — zero OAuth setup overhead) |
-| **Click Water Body on Map** | Sees water body boundary, general description, and restriction overview. **Does NOT see pre-seeded/existing spot pins.** | Immediately sees water body boundary, description, restriction overview, **AND all pre-seeded / previously discovered spot pins & community reviews**. |
-| **AI Spatial Grid Analyses** | Limited to **2 AI grid analyses total**; output restricted to **basic info** (grid overlay + top pin location & brief summary; tactical lure/bait advice locked). | **Unlimited AI grid analyses** with full tactical descriptions, bait/lure presentation tips, and confidence scores. |
-| **Single-Cell (`D5`) Micro-Analysis** | Locked (Prompts Email registration) | **Unlocked**: Click any individual grid cell on the water body for an on-demand AI deep-dive of that sector. |
-| **Spot Reviews & Catch Photos** | Locked (Prompts Email registration) | **Unlocked**: View all community reviews/photos and attach new reviews, ratings, and catch photos to water body pins. |
-| **Restriction Reporting** | View-only | **Unlocked**: Flag cells/spots with community restriction updates. |
+| **1. Open the App (Map View)** | Sees the full-screen map with **Water Body Pins and their names** placed over water bodies. | Sees the full-screen map with **Water Body Pins and their names**, plus quick indicators of saved/analyzed spots. |
+| **2. Click a Water Body Pin** | Sees **Basic Water Body Info**: <br>• Water body description & restriction overview<br>• **What fish species** can be caught there<br>• **Some teaser community feedback/reviews** attached to the water body<br>• **Call to Action (CTA)** to register for exact grid spots & full access.<br>*(If selecting an unindexed water body, guests can trigger up to 2 AI water-body basic summaries).* | Sees full Water Body Info **plus** immediate access to the **Spatial Grid (`A1..H8`)**, **pre-seeded / existing exact Fishing Spot Pins**, full tactical descriptions, and all community reviews & catch photos. |
+| **3. Exact Fishing Spots on the Spatial Grid** | **Locked behind Email Registration CTA** (Guests cannot see the exact grid spot coordinates/pins or tactical lure/bait advice). | **Full Unlimited Access**: Generate AI spatial grids for any water type, fishing technique, target fish, and access mode; view exact spot pins on the grid; click any individual grid cell (`D5`) for a micro-analysis. |
+| **4. Reviews, Feedback & Catch Photos** | Sees only a limited preview/summary of feedback on the water body pin. Cannot post reviews or view full photo galleries. | **Full Access**: Read all reviews & catch photos, and post new reviews, star ratings, and catch photos. |
 
 ---
 
@@ -41,6 +44,6 @@ Anglers exploring a water body (lake, river, reservoir, or coastal shoreline) st
 | :--- | :--- | :--- |
 | **UI Layout** | **Full-screen Map-First Web/PWA** (100% viewport map + floating search bar + side drawer on desktop / bottom sheet on mobile) | Native iOS & Android offline-capable mobile apps |
 | **Map & Spatial Grid** | **MapLibre GL JS** + **OpenFreeMap/OSM** vector tiles + **Overpass API** + **Turf.js** adaptive grid (whole lake if `<5km`; viewport/`2-3km` sector clip for rivers, large reservoirs & sea coasts) | High-res satellite imagery, bathymetric depth contour maps (Navionics/C-Map integration) |
-| **AI Spot Advisor** | **Google Gemini 2.5 Flash (Free Tier)** via provider-agnostic adapter + **strictly structural prompt** (shoreline, inflows, reeds, technique, species, season, community reviews) + **Drizzle/Postgres caching** | Live weather/wind/barometric pressure (Open-Meteo) + tide APIs + satellite vision analysis |
+| **AI Spot Advisor** | **Google Gemini 2.5 Flash (Free Tier)** via provider-agnostic adapter + **strictly structural prompt** + **Drizzle/Postgres caching** | Live weather/wind/barometric pressure (Open-Meteo) + tide APIs + satellite vision analysis |
 | **Fishing Restrictions** | **3-Layer Hybrid**: (1) Deterministic OSM reserve/dam/no-fishing tag blocking, (2) AI summary of Poland/Spain permit & seasonal rules + legal disclaimer, (3) Community restriction flags | Official government fishery API integrations & real-time permit links |
-| **Reviews & Photos** | Attached to water body spot pins, client-side WebP compression (`<200KB`) stored in **Supabase Storage Free Tier** | AI fish recognition & length/weight estimation from photos, leaderboards |
+| **Reviews & Photos** | Attached to water body pins / spots, client-side WebP compression (`<200KB`) stored in **Supabase Storage Free Tier** | AI fish recognition & length/weight estimation from photos, leaderboards |

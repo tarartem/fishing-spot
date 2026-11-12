@@ -30,18 +30,30 @@ jobs:
         if: ${{ env.DATABASE_URL != '' }}
         run: npm run db:migrate
 
-      - name: Trigger Render Deploy Hook
+      - name: Trigger Render Deploy
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        if: ${{ env.RENDER_DEPLOY_HOOK_URL != '' }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: |
-          echo "Triggering Render deployment..."
-          curl -f -X POST "$RENDER_DEPLOY_HOOK_URL"
-          echo "Render deploy triggered successfully."
+          if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "Triggering Render deployment via deploy hook..."
+            curl -f -X POST "$RENDER_DEPLOY_HOOK_URL"
+            echo "Render deploy hook triggered successfully."
+          elif [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ]; then
+            echo "Triggering Render deployment via Render REST API..."
+            curl -s -f -X POST -H "Authorization: Bearer $RENDER_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{"clearCache": "do_not_clear"}' \
+              "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys"
+            echo "Render API deployment initiated successfully."
+          else
+            echo "Relying on Render's native GitHub commit auto-deploy on branch production."
+          fi
 
       - name: Verify Health Endpoint
         env:
-          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL || 'https://fishing-spot.onrender.com' }}
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL || 'https://fishing-spot-letv.onrender.com' }}
         run: |
           echo "Checking health endpoint at $PRODUCTION_URL/api/health..."
           for i in {1..30}; do

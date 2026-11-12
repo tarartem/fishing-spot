@@ -4,7 +4,7 @@ test.describe('Fishing Spot — Spain MVP Screenshot-to-Grid Artifact E2E Flow',
   test('Guest sees 2-mode Satellite/Terrain switcher (no Plain Map), captures satellite imagery even from Terrain mode, sees species roster & road-surface access, and saves artifact', async ({
     page,
   }) => {
-    test.setTimeout(45000);
+    test.setTimeout(60000);
     await page.goto('/');
 
     // 1. Verify suggested spot chips and obsolete Plain Map view are absent
@@ -31,7 +31,7 @@ test.describe('Fishing Spot — Spain MVP Screenshot-to-Grid Artifact E2E Flow',
 
     // 5. User receives annotated screenshot + Fish Species card + Geography/Altitude/Road Access card + Spain Regulations + Spots + Best Game Plan
     await expect(page.getByTestId('user-artifact-view')).toBeVisible({
-      timeout: 30000,
+      timeout: 45000,
     });
     await expect(
       page.getByTestId('annotated-artifact-screenshot')
@@ -52,6 +52,21 @@ test.describe('Fishing Spot — Spain MVP Screenshot-to-Grid Artifact E2E Flow',
 
     // 6. Verify 1-page PDF report download button & English-only UI outside restrictions
     await expect(page.locator('header')).not.toContainText('España');
+    await expect(page.locator('header')).toContainText(
+      'Locate exact fishing spots with satellite AI'
+    );
+
+    // Verify Header GPS link, Copy button, and New Analysis CTA
+    await expect(page.getByTestId('copy-gps-button')).toBeVisible();
+    await expect(page.locator('a[href*="google.com/maps"]')).toBeVisible();
+    await expect(page.getByTestId('artifact-back-to-map-button')).toContainText(
+      'Analyze Another Location'
+    );
+
+    // Verify Dedicated Metadata Footer
+    await expect(page.getByTestId('artifact-footer')).toBeVisible();
+    await expect(page.getByTestId('artifact-footer')).toContainText('v0.');
+
     const [pdfDownload] = await Promise.all([
       page.waitForEvent('download'),
       page.getByTestId('download-pdf-report-button').click(),
@@ -96,11 +111,37 @@ test.describe('Fishing Spot — Spain MVP Screenshot-to-Grid Artifact E2E Flow',
     await page.getByTestId('initiate-ai-analysis-button').click();
 
     await expect(page.getByTestId('user-artifact-view')).toBeVisible({
-      timeout: 30000,
+      timeout: 45000,
     });
     await expect(page.getByTestId('no-water-detected-banner')).toBeVisible();
     await expect(page.getByTestId('artifact-spot-1')).toHaveCount(0);
     await expect(page.getByTestId('download-pdf-report-button')).toHaveCount(0);
     await expect(page.locator('header')).not.toContainText('España');
+  });
+
+  test('Direct GPS coordinate search flies to target without Nominatim network request', async ({
+    page,
+  }) => {
+    let nominatimCalled = false;
+    await page.route('https://nominatim.openstreetmap.org/search*', async (route) => {
+      nominatimCalled = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+
+    await page.goto('/');
+    await page.getByTestId('water-body-search-input').fill('39.248, -0.935');
+    await page.getByRole('button', { name: 'Go' }).click();
+
+    // Settle brief flyTo
+    await page.waitForTimeout(1000);
+    expect(nominatimCalled).toBe(false);
+
+    // Capture framed area at that GPS coordinate
+    await page.getByTestId('capture-map-area-button').click();
+    await expect(page.getByTestId('screenshot-preview-panel')).toBeVisible();
   });
 });

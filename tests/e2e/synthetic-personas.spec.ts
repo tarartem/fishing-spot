@@ -65,19 +65,8 @@ test.describe('Fishing Spot — Synthetic User Personas E2E Testing Suite', () =
     await page.getByTestId('satellite-source-pnoa').click();
     await expect(page.getByTestId('satellite-source-pnoa')).toHaveClass(/bg-sky-400/);
 
-    // 3. Activates manual drag-box selection for exact sector targeting
-    await page.getByTestId('toggle-drag-select-button').click();
-    const dragOverlay = page.getByTestId('drag-select-overlay');
-    await expect(dragOverlay).toBeVisible();
-
-    // 4. Drags a custom box across the water sector (from x:250,y:200 to x:550,y:500)
-    const box = await dragOverlay.boundingBox();
-    if (box) {
-      await page.mouse.move(box.x + 250, box.y + 200);
-      await page.mouse.down();
-      await page.mouse.move(box.x + 550, box.y + 500, { steps: 10 });
-      await page.mouse.up();
-    }
+    // 3. Captures framed area for exact sector targeting
+    await page.getByTestId('capture-map-area-button').click();
 
     // 5. Verifies preview panel opens with satellite capture badge (auto-switched from terrain)
     await expect(page.getByTestId('screenshot-preview-panel')).toBeVisible();

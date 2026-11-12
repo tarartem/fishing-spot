@@ -68,11 +68,19 @@
    - Retains multi-source Spain checks (curated DB + Wikipedia/OSM protected reserves + dam/power-plant 100m exclusion buffers + Autonomous Community license & *Real Decreto 630/2013* invasive species laws).
 
 6. **Professional Minimalist Report UI & 1-Page PDF Export ("Multiple X's" Stacking Rationale)**:
+   - **Main Screen Brand Identity**:
+     - Main top header displays the clear value proposition directly below the logo: *"Locate exact fishing spots with satellite AI, terrain & regulations"*.
    - **Map Landing & Selection Preview**:
-     - Concise reticle hint (`Frame your fishing area`) and clear CTA hierarchy (`Capture Framed Area` primary emerald CTA, `or` divider, `Draw Custom Area` secondary button).
-     - Streamlined Selection Preview modal: removes "Step 1" badge, "Retake Selection" header button, and optional lure/gear input field; provides a clear segmented imagery selector (`PNOA HD (Spain)` | `Esri World`) and concise scale summary.
-     - Global top header omits redundant `Change Location` button (kept cleanly inside the report modal).
+     - Concise reticle hint (`Frame your fishing area`) and single primary emerald CTA `📸 Capture Framed Area` (Draw Custom Area removed).
+     - Streamlined Selection Preview modal: segmented imagery selector (`PNOA HD (Spain)` | `Esri World`) and scale summary.
    - **Preparation State (Single-Feature Sequential Stepper)**: While analysis runs, a dedicated dialog demonstrates **1 concise capability at a time** across all 6 checkpoints (water boundary scan, bottom structure, angler ecology, shore & road access, regulations check, tactical synthesis) sequentially and independently of backend speed so every capability is clearly visible.
+   - **Sticky Analysis Header & Top-Right Action Group**:
+     - The artifact header is sticky (`sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md`) so action buttons remain visible and clickable regardless of how far the angler scrolls through the spots.
+     - **Top-Right Action Buttons**:
+       - `[ 📄 PDF Report ]` (Secondary action: slate surface)
+       - `[ 🖼️ Map PNG ]` (Secondary action: slate surface)
+       - `[ ✨ Analyze Another Location ]` (Primary CTA: emerald solid, clearly signaling ability to start a new analysis) or `[ ← Reposition Map Over Water ]` if no fishable water exists.
+     - **GPS Coordinates in Header**: Displays the analyzed sector's center GPS coordinates (e.g. `📍 39.24812, -0.93540`) as a clickable hyperlink redirecting to Google Maps in a new tab, paired with an adjacent `📋` copy button that copies coordinates to the clipboard buffer with transient `✓ Copied!` confirmation.
    - **Water Body & Fish Species Card**: Name, region, altitude/scale, and structured **Fish Species Present** in English.
    - **Scannable Minimalist Spot Cards (`1–6`) with Stacking Rationale**:
      - Clean semantic rank indicator: **Green** (`#22c55e`) for Spots 1–2 (Prime/Trophy), **Blue** (`#0ea5e9`) for Spots 3–4 (Sheltered/Accessible), and **Yellow** (`#eab308`) for Spots 5–6 (Secondary/Bottlenecks).
@@ -81,10 +89,12 @@
      - Compact tactical approach & technique notes without visual clutter or nested boxes.
    - **Practical Access & Game Plan (`best_game_plan`)**: Ordered parking/road → walking → fishing route.
    - **Spain Regulations Card**: Concise status/permit/exclusion summary verifying whether fishing is allowed (the only place where Spanish legal/permit terms appear).
-   - **Header & Navigation Controls**:
-     - Concise `← Change Location` button.
-     - Top-right action group for exports: `[ 📄 PDF Report ]` and `[ 🖼️ Map PNG ]`.
-     - Complete removal of obsolete internal telemetry chips.
+   - **Dedicated Metadata Footer**:
+     - Relocates technical metadata out of the header into a clean footer at the bottom of the analysis card:
+       - Export filename (`fishing-spot-grid-<slug>.png`) & Report ID (`FS-xxx`)
+       - Generated timestamp
+       - App version (`v0.3.1`)
+       - Data attribution notice (`AI Hydrographic Intelligence · OpenStreetMap, IGN PNOA & Esri`)
 
 ---
 
@@ -109,3 +119,6 @@
   - Flow direction (`flowBearingDeg`, `flowCardinal`, `flowLabel`, `isFlowingWater`, `inflowPoints`) is computed using length-weighted OSM vectors and DEM cross-check (`|Δelev| >= 2m` threshold), while stillwater basins away from scaled inflow plumes (`200m–600m`) remain `stillwater`.
   - On flowing water or inside verified inflow zones, points/channels confirm `current_break` (with downstream-eddy/inflow tie-breaker preference and directional cast/drift tactics citing upstream/downstream flow); on calm stillwater away from inflows, `current_break` is omitted rather than inflated, narrows are titled `Constriction Neck` / `Cove Mouth Pass` with stillwater tactics (never citing `"current edge"`), and `channel_narrowing` spots are capped at max `2` per report when other structures exist.
   - On flowing rivers, `buildDynamicGamePlan` prefers downstream-to-upstream progression among **safe, shore-accessible** spots (terrain safety/slope overrides upstream routing).
+- **AC-F02-14 (Sticky Top-Right Actions & Unified Button Hierarchy)**: Given the analysis report modal is open, When scrolling through spot recommendations and regulations, Then the header remains sticky at the top, the action buttons (`📄 PDF Report`, `🖼️ Map PNG`, `✨ Analyze Another Location`) remain permanently anchored in the top-right corner, and `✨ Analyze Another Location` is styled as the primary emerald CTA (`bg-emerald-500`) while export buttons follow secondary slate styling.
+- **AC-F02-15 (Header GPS Coordinates & Google Maps Link with Copy)**: Given an analyzed sector bounding box, When the analysis header renders, Then it displays the sector center GPS coordinates as a clickable hyperlink opening Google Maps in a new tab (`target="_blank"`), paired with a copy button that copies the coordinates to the clipboard and shows transient `✓ Copied!` confirmation.
+- **AC-F02-16 (Card Footer Metadata)**: Given an analysis report modal, When reviewing technical metadata (Version, Date, Report ID, File Name), Then this metadata is rendered inside the dedicated footer at the bottom of the card, keeping the header clean.

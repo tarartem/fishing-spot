@@ -22,13 +22,13 @@
    - **`⛰️ Terrain`**: Displays **OpenTopoMap** topographic contours, elevation lines, and road/track classifications for assessing shore steepness and vehicle approaches.
    - **Plain Map Removed**: The `plain` OpenFreeMap street style is obsolete and removed from `MapStyleMode` and the UI switcher.
 
-2. **Clean Map Screen (No Suggested Spot Chips)**:
+2. **Clean Map Screen & Dual Search (GPS Coordinates & Nominatim)**:
    - No pre-populated floating spot/water-body chip bars clutter the map canvas.
-   - Users navigate freely by panning/zooming or using the top search bar, which queries **OpenStreetMap Nominatim** (prioritizing Spain `countrycodes=es`) and flies the map directly to the selected result.
+   - **GPS Coordinate Parsing**: When a user enters raw latitude/longitude coordinates (decimal degrees e.g. `39.248, -0.935`, space-separated `39.248 -0.935`, or DMS formats) in the top search bar, the app parses the coordinates client-side and immediately flies the map (`map.flyTo`) directly to that location with zero network latency and zero external API dependencies.
+   - **Place Name Search**: When non-coordinate text is entered, the search checks curated Spanish water bodies first, followed by **OpenStreetMap Nominatim** (`countrycodes=es`), flying directly to the matching water body or town.
 
-3. **Always-Satellite `1024×1024` Capture (Regardless of Active UI View)**:
-   - **Primary — Manual Drag-Box Selection (`✂️ Select Area (Drag Box)`)**: User drags a custom rectangle over the exact water body sector. Both the screenshot pixels and geographic `bbox` (`map.unproject`) are cropped strictly to that rectangle.
-   - **Secondary — Target Frame Capture (`📸 Capture Framed Box`)**: Crops strictly to the on-screen square target reticle (`reticleRef.current.getBoundingClientRect()`).
+3. **Streamlined 1-Click Framed Area Capture (Always-Satellite `1024×1024`)**:
+   - **Single Primary Action (`📸 Capture Framed Area`)**: The obsolete "Draw Custom Area" drag-box overlay has been removed to streamline the workflow into a single, intuitive 1-click capture. Anglers pan/zoom the map to position their target water body within the on-screen square reticle (`Frame your fishing area`) and click **Capture Framed Area**.
    - **Always-Satellite Guarantee**:
      - If the user is in `Satellite` mode, the compositor captures/stitches crisp satellite tiles for `bbox` (and can enhance water-feature contrast).
      - If the user is in `Terrain` mode when capturing, the compositor **stitches the corresponding Satellite tiles** (`IGN PNOA` or `Esri`, matching the user's selected satellite source) onto the `1024×1024` canvas for AI analysis, while optionally preserving the terrain metadata context.
@@ -48,3 +48,5 @@
 - **AC-F01-2 (Satellite Source Switch)**: Given `Satellite` mode is active, When the user toggles between `IGN PNOA (Spain HD)` and `Esri (Alt)`, Then the map tile source switches without losing the current map center/zoom.
 - **AC-F01-3 (Always-Satellite Capture from Terrain View)**: Given the user switches the map to `Terrain` view and captures an area, When the screenshot preview opens, Then the captured `1024×1024` image sent for AI analysis is **Satellite imagery** (stitched for the exact `bbox`), never a plain/topo-only drawing.
 - **AC-F01-4 (Optimal Scale Guidance)**: Given the user selects a sector `< 0.35 km` or `> 8 km`, When the preview opens, Then the scale banner surfaces clear scale guidance (`Optimal 0.4–2.5 km` vs. `Over-Zoomed` vs. `Wide Basin`).
+- **AC-F01-5 (GPS Coordinate Search Parsing)**: Given a user inputs valid GPS coordinates into the search bar (e.g., `39.248, -0.935` or `39.248 -0.935`), When the search is submitted, Then the map immediately flies to those exact coordinates without sending an external Nominatim network request.
+- **AC-F01-6 (Single Primary Capture & Draw Custom Area Removed)**: Given the main map view is loaded, When checking the capture controls, Then `📸 Capture Framed Area` is the single prominent primary CTA, and no `Draw Custom Area` button or drag overlay exists.

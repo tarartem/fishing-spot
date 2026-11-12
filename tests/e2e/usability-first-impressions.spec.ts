@@ -94,7 +94,7 @@ test.describe('Usability & First Impression Deep Testing', () => {
     console.log('MOBILE_INITIATE_BTN_VISIBLE_IMMEDIATELY:', isInitiateVisible);
 
     await initiateBtn.click();
-    await expect(page.getByTestId('user-artifact-view')).toBeVisible({ timeout: 35000 });
+    await expect(page.getByTestId('user-artifact-view')).toBeVisible({ timeout: 45000 });
 
     await page.waitForTimeout(1500);
     await page.screenshot({

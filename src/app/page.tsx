@@ -21,6 +21,7 @@ import {
   formatReportTimestamp,
   generateReportId,
 } from '@/shared/app-version';
+import { parseGpsCoordinates } from '@/shared/utils/gps-coordinates';
 import {
   ANGLER_FEATURE_CATALOG,
   computeSelectionScale,
@@ -107,6 +108,7 @@ export default function HomePage() {
     zoom?: number;
     label?: string;
   } | null>(null);
+  const [copiedGps, setCopiedGps] = useState<boolean>(false);
 
   // Screenshot & AI Artifact Workflow State
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>('map_browse');
@@ -141,13 +143,27 @@ export default function HomePage() {
     loadPins();
   }, []);
 
-  // Search any reservoir, river, or town in Spain via OpenStreetMap Nominatim
+  // Search any reservoir, river, town, or direct GPS coordinates in Spain
   const handleSearchSpainLocation = async (e: React.FormEvent) => {
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q) return;
 
-    // 1. Check local curated Spain water bodies first
+    // 1. Direct GPS coordinate parsing (e.g. "39.248, -0.935" or DMS) with zero network delay
+    const gpsHit = parseGpsCoordinates(q);
+    if (gpsHit) {
+      setActiveWaterBody(null);
+      setFlyToTarget({
+        lng: gpsHit.lng,
+        lat: gpsHit.lat,
+        zoom: 14.5,
+        label: gpsHit.formattedLabel,
+      });
+      setWorkflowStep('map_browse');
+      return;
+    }
+
+    // 2. Check local curated Spain water bodies first
     const localMatch = waterBodyPins.find(
       (p) =>
         p.name.toLowerCase().includes(q.toLowerCase()) ||
@@ -165,7 +181,7 @@ export default function HomePage() {
       return;
     }
 
-    // 2. Query OpenStreetMap Nominatim (prioritizing Spain `countrycodes=es`)
+    // 3. Query OpenStreetMap Nominatim (prioritizing Spain `countrycodes=es`)
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=es&q=${encodeURIComponent(q)}&limit=1`
@@ -310,6 +326,49 @@ export default function HomePage() {
 
   const previewScale = computeSelectionScale(selectedBbox);
 
+  const centerLat = currentArtifact
+    ? ((currentArtifact.bbox[1] + currentArtifact.bbox[3]) / 2).toFixed(5)
+    : '0.00000';
+  const centerLng = currentArtifact
+    ? ((currentArtifact.bbox[0] + currentArtifact.bbox[2]) / 2).toFixed(5)
+    : '0.00000';
+  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${centerLat},${centerLng}`;
+  const artifactSlug = currentArtifact
+    ? currentArtifact.analysis.water_body_name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+    : '';
+  const artifactFileName = `fishing-spot-grid-${artifactSlug}.png`;
+  const reportId = currentArtifact
+    ? currentArtifact.analysis.report_id || currentArtifact.report_id
+    : '';
+  const generatedAt = currentArtifact
+    ? currentArtifact.analysis.generated_at || currentArtifact.createdAt
+    : '';
+
+  const handleCopyGps = async () => {
+    const text = `${centerLat}, ${centerLng}`;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else if (typeof document !== 'undefined') {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+    } catch {
+      // Fallback
+    }
+    setCopiedGps(true);
+    setTimeout(() => setCopiedGps(false), 2000);
+  };
+
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
       {/* Top Floating Header */}
@@ -323,12 +382,12 @@ export default function HomePage() {
               Fishing Spot · Spain
             </h1>
             <p className="text-[11px] text-slate-400">
-              Hydrographic Spot Finder · Terrain, Access &amp; Regulations
+              Locate exact fishing spots with satellite AI, terrain &amp; regulations
             </p>
           </div>
         </div>
 
-        {/* Search Bar to Navigate to Any Spanish Water Body */}
+        {/* Search Bar to Navigate to Any Spanish Water Body or GPS Coordinates */}
         <form
           onSubmit={handleSearchSpainLocation}
           className="flex flex-1 max-w-md items-center gap-1.5"
@@ -338,12 +397,12 @@ export default function HomePage() {
             data-testid="water-body-search-input"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search Spanish lake, river, or town..."
+            placeholder="Search Spanish lake, river, town or GPS coordinates..."
             className="w-full rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
           />
           <button
             type="submit"
-            className="rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-slate-700 transition"
+            className="rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-1.5 text-xs font-bold text-emerald-300 hover:bg-slate-700 transition"
           >
             Go
           </button>
@@ -524,44 +583,63 @@ export default function HomePage() {
       {workflowStep === 'artifact_ready' && currentArtifact && (
         <section
           data-testid="user-artifact-view"
-          className="fixed inset-0 z-40 overflow-y-auto bg-slate-950/90 p-4 pt-20 backdrop-blur-md"
+          className="fixed top-20 bottom-0 left-0 right-0 z-40 overflow-y-auto bg-slate-950/90 p-4 pt-2 backdrop-blur-md"
         >
-          <div className="mx-auto max-w-6xl rounded-2xl border border-emerald-500/50 bg-slate-900 p-5 shadow-2xl">
-            {/* Artifact Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
-              <div>
+          <div className="mx-auto max-w-6xl rounded-2xl border border-emerald-500/50 bg-slate-900 shadow-2xl overflow-hidden">
+            {/* Artifact Sticky Top Header — Buttons Always Anchored in Top Right */}
+            <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900/95 px-5 py-3.5 shadow-md backdrop-blur-md">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   {currentArtifact.analysis.has_fishable_water === false ? (
                     <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-bold uppercase text-amber-300">
                       ⚠️ No Fishable Water Detected
                     </span>
                   ) : (
-                    <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
+                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
                       ✓ Location Analysis Ready
                     </span>
                   )}
                   <span className="text-xs text-slate-400">
                     {currentArtifact.analysis.region_label}
                   </span>
-                  <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] text-slate-300">
-                    {currentArtifact.analysis.report_id || currentArtifact.report_id}
-                  </span>
-                  <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] text-sky-300">
-                    v{currentArtifact.analysis.app_version || APP_VERSION}
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    {currentArtifact.analysis.generated_at || currentArtifact.createdAt}
-                  </span>
+
+                  {/* GPS Coordinates Hyperlink + Copy to Clipboard Button */}
+                  <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950/80 px-2.5 py-0.5 text-xs">
+                    <a
+                      href={googleMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open coordinates in Google Maps"
+                      className="font-mono text-[11px] font-medium text-sky-400 hover:text-sky-300 hover:underline transition"
+                    >
+                      📍 {centerLat}, {centerLng}
+                    </a>
+                    <button
+                      type="button"
+                      data-testid="copy-gps-button"
+                      onClick={handleCopyGps}
+                      title="Copy coordinates to clipboard"
+                      className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:bg-slate-800 hover:text-white transition"
+                    >
+                      {copiedGps ? (
+                        <span className="text-emerald-400 font-bold">✓ Copied!</span>
+                      ) : (
+                        <span>📋 Copy</span>
+                      )}
+                    </button>
+                  </div>
                 </div>
+
                 <h2
                   data-testid="recognized-water-body-name"
-                  className="mt-1 text-xl font-bold tracking-tight text-white"
+                  className="mt-1 text-xl font-bold tracking-tight text-white truncate"
                 >
                   {currentArtifact.analysis.water_body_name}
                 </h2>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              {/* Action Buttons: Always in top-right corner with consistent primary/secondary hierarchy */}
+              <div className="ml-auto shrink-0 flex flex-wrap items-center gap-2">
                 {currentArtifact.analysis.has_fishable_water !== false &&
                   currentArtifact.analysis.recommended_spots.length > 0 && (
                     <>
@@ -569,7 +647,7 @@ export default function HomePage() {
                         type="button"
                         data-testid="download-pdf-report-button"
                         onClick={() => downloadOnePageFishingPdfReport(currentArtifact)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-700 hover:text-white transition"
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-700 hover:text-white transition shadow-sm"
                       >
                         <span>📄</span> PDF Report
                       </button>
@@ -577,7 +655,7 @@ export default function HomePage() {
                         type="button"
                         data-testid="download-artifact-button"
                         onClick={() => handleDownloadArtifactImage(currentArtifact)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-700 hover:text-white transition"
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-700 hover:text-white transition shadow-sm"
                       >
                         <span>🖼️</span> Map PNG
                       </button>
@@ -587,14 +665,20 @@ export default function HomePage() {
                   type="button"
                   data-testid="artifact-back-to-map-button"
                   onClick={() => setWorkflowStep('map_browse')}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/15 px-3.5 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500 hover:text-slate-950 transition"
+                  className={
+                    currentArtifact.analysis.has_fishable_water === false
+                      ? 'inline-flex items-center gap-1.5 rounded-xl bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-amber-300 transition shadow-md'
+                      : 'inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-emerald-400 transition shadow-md shadow-emerald-950/40'
+                  }
                 >
                   {currentArtifact.analysis.has_fishable_water === false
                     ? '← Reposition Map'
-                    : '← Change Location'}
+                    : '✨ Analyze Another Location'}
                 </button>
               </div>
             </div>
+
+            <div className="p-5">
 
             {currentArtifact.analysis.has_fishable_water === false ? (
               <div
@@ -971,6 +1055,33 @@ export default function HomePage() {
               </div>
             </div>
             )}
+            </div>
+
+            {/* Artifact Dedicated Metadata Footer */}
+            <footer
+              data-testid="artifact-footer"
+              className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 bg-slate-950/40 px-5 py-3.5 text-xs text-slate-400"
+            >
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="font-mono text-slate-300 bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800">
+                  ID: {reportId}
+                </span>
+                <span className="font-mono text-slate-400">
+                  📁 {artifactFileName}
+                </span>
+                <span>
+                  📅 {generatedAt}
+                </span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <span className="font-mono text-sky-400 bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800">
+                  v{currentArtifact.analysis.app_version || APP_VERSION}
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  AI Hydrographic Intelligence · IGN PNOA, Esri &amp; OpenStreetMap
+                </span>
+              </div>
+            </footer>
           </div>
         </section>
       )}

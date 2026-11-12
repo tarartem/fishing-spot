@@ -116,12 +116,6 @@ export function FishingMap({
   const reticleRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
-  const [isDragSelectMode, setIsDragSelectMode] = useState(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(
-    null
-  );
-  const [cropBox, setCropBox] = useState<CropBoxPixels | null>(null);
-
   // Initialize MapLibre GL JS centered in Spain (Embalse de Cortes, Valencia) with preserveDrawingBuffer: true
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -230,9 +224,9 @@ export function FishingMap({
     return [-0.972, 39.222, -0.92, 39.262];
   };
 
-  const triggerScreenshotCapture = (customCrop: CropBoxPixels | null) => {
+  const triggerScreenshotCapture = () => {
     const canvas = mapRef.current?.getCanvas() ?? null;
-    const effectiveCrop = customCrop ?? getReticleCropBox();
+    const effectiveCrop = getReticleCropBox();
     const bbox = resolveCurrentBbox(effectiveCrop);
     onCaptureArea({
       canvas,
@@ -240,38 +234,6 @@ export function FishingMap({
       bbox,
       waterBodyHint: activeWaterBody,
     });
-    setIsDragSelectMode(false);
-    setDragStart(null);
-  };
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDragSelectMode) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setDragStart({ x, y });
-    setCropBox({ x, y, width: 0, height: 0 });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDragSelectMode || !dragStart) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const currentX = e.clientX - rect.left;
-    const currentY = e.clientY - rect.top;
-
-    const x = Math.min(dragStart.x, currentX);
-    const y = Math.min(dragStart.y, currentY);
-    const width = Math.abs(currentX - dragStart.x);
-    const height = Math.abs(currentY - dragStart.y);
-    setCropBox({ x, y, width, height });
-  };
-
-  const handleMouseUp = () => {
-    if (!isDragSelectMode || !dragStart) return;
-    setDragStart(null);
-    if (cropBox && cropBox.width > 40 && cropBox.height > 40) {
-      triggerScreenshotCapture(cropBox);
-    }
   };
 
   return (
@@ -283,46 +245,18 @@ export function FishingMap({
         data-testid="map-canvas"
       />
 
-      {/* Manual Drag-to-Select Crop Overlay */}
-      {isDragSelectMode && (
-        <div
-          data-testid="drag-select-overlay"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          className="absolute inset-0 z-10 cursor-crosshair bg-slate-950/25"
-        >
-          <div className="pointer-events-none absolute top-24 left-1/2 -translate-x-1/2 rounded-full border border-amber-400 bg-slate-950/90 px-4 py-1.5 text-xs font-bold text-amber-300 shadow-xl">
-            ✂️ Drag a box directly over the water body sector you want to analyze
-          </div>
-          {cropBox && cropBox.width > 5 && (
-            <div
-              style={{
-                left: cropBox.x,
-                top: cropBox.y,
-                width: cropBox.width,
-                height: cropBox.height,
-              }}
-              className="pointer-events-none absolute border-2 border-dashed border-amber-400 bg-emerald-500/15 shadow-2xl"
-            />
-          )}
-        </div>
-      )}
-
       {/* Visual Framing Reticle on Map (Exact 1:1 Crop Target) */}
-      {!isDragSelectMode && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div
-            ref={reticleRef}
-            data-testid="target-reticle-box"
-            className="h-[64vh] w-[64vh] max-w-[85vw] max-h-[65vw] rounded-2xl border-2 border-dashed border-white/35 shadow-[0_0_0_9999px_rgba(2,6,23,0.22)] flex flex-col justify-end p-3"
-          >
-            <div className="text-[11px] font-medium text-slate-200/90 bg-slate-950/75 px-3 py-1 rounded-lg self-center text-center">
-              Frame your fishing area
-            </div>
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div
+          ref={reticleRef}
+          data-testid="target-reticle-box"
+          className="h-[64vh] w-[64vh] max-w-[85vw] max-h-[65vw] rounded-2xl border-2 border-dashed border-white/35 shadow-[0_0_0_9999px_rgba(2,6,23,0.22)] flex flex-col justify-end p-3"
+        >
+          <div className="text-[11px] font-medium text-slate-200/90 bg-slate-950/75 px-3 py-1 rounded-lg self-center text-center">
+            Frame your fishing area
           </div>
         </div>
-      )}
+      </div>
 
       {/* Clean Floating Map Controls: Map Style Switcher (Satellite | Terrain) + Satellite Provider + Area Selection Bar */}
       <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-4 pt-20">
@@ -388,36 +322,16 @@ export function FishingMap({
           </div>
         </div>
 
-        {/* Bottom Center Action Bar: Primary Capture or Optional Custom Crop */}
-        <div className="pointer-events-auto mb-2 flex flex-wrap items-center justify-center gap-3 self-center rounded-2xl border border-slate-800/90 bg-slate-950/90 px-4 py-3 shadow-2xl backdrop-blur-xl">
+        {/* Bottom Center Action Bar: Primary Capture */}
+        <div className="pointer-events-auto mb-2 flex items-center justify-center self-center rounded-2xl border border-slate-800/90 bg-slate-950/90 px-4 py-3 shadow-2xl backdrop-blur-xl">
           <button
             type="button"
             data-testid="capture-map-area-button"
-            onClick={() => triggerScreenshotCapture(null)}
+            onClick={triggerScreenshotCapture}
             className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-slate-950 shadow-lg transition hover:bg-emerald-400"
           >
             <span>📸</span>
             <span>Capture Framed Area</span>
-          </button>
-
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            or
-          </span>
-
-          <button
-            type="button"
-            data-testid="toggle-drag-select-button"
-            onClick={() => setIsDragSelectMode((prev) => !prev)}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
-              isDragSelectMode
-                ? 'border border-amber-400 bg-amber-500 text-slate-950'
-                : 'border border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500 hover:text-white'
-            }`}
-          >
-            <span>{isDragSelectMode ? '✕' : '✂️'}</span>
-            <span>
-              {isDragSelectMode ? 'Cancel Selection' : 'Draw Custom Area'}
-            </span>
           </button>
         </div>
       </div>

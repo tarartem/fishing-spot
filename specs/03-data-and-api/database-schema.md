@@ -120,6 +120,13 @@ erDiagram
         string photo_type "catch | spot_view | regulation_sign"
         timestamp created_at
     }
+
+    APP_RELEASES {
+        string version PK "Semantic version matching package.json (e.g., 0.2.0)"
+        timestamp released_at
+        string summary "Short title for the release"
+        jsonb release_notes "Array of human-friendly one-sentence release notes"
+    }
 ```
 
 ## 2. Indexing & Performance Strategy ($0 Tier)

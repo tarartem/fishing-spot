@@ -3,14 +3,34 @@
 import React, { useEffect, useState } from 'react';
 import { FishingMap } from '@/modules/map-grid/components/FishingMap';
 import {
+  AnalysisProgressDialog,
+  MIN_ANALYSIS_SHOWCASE_MS,
+} from '@/modules/map-grid/components/AnalysisProgressDialog';
+import {
   captureMapAreaScreenshot,
   renderAnnotatedGridScreenshot,
   type CropBoxPixels,
 } from '@/modules/map-grid/screenshot-compositor';
-import { computeSelectionScale } from '@/modules/ai-advisor/geospatial-context.service';
+import {
+  cleanSpotText,
+  cleanSpotTitle,
+  downloadOnePageFishingPdfReport,
+} from '@/modules/map-grid/pdf-report';
+import {
+  APP_VERSION,
+  formatReportTimestamp,
+  generateReportId,
+} from '@/shared/app-version';
+import {
+  ANGLER_FEATURE_CATALOG,
+  computeSelectionScale,
+} from '@/modules/ai-advisor/scale-utils';
 import type {
   BoundingBox,
+  ClientWaterMaskSummary,
   MapStyleMode,
+  SatelliteSource,
+  SpotAccessMode,
   UserScreenshotArtifact,
   WaterBodyArtifactAnalysis,
   WaterBodyPinSummary,
@@ -18,8 +38,65 @@ import type {
 
 type WorkflowStep = 'map_browse' | 'screenshot_preview' | 'artifact_ready';
 
+function formatAccessBadge(mode: SpotAccessMode): {
+  icon: string;
+  label: string;
+  classes: string;
+} {
+  switch (mode) {
+    case 'car_asphalt':
+      return {
+        icon: '🚗',
+        label: 'Paved Road',
+        classes: 'border-slate-700 bg-slate-800/80 text-slate-200',
+      };
+    case 'dirt_track':
+      return {
+        icon: '🚙',
+        label: 'Dirt Track',
+        classes: 'border-slate-700 bg-slate-800/80 text-slate-200',
+      };
+    case 'boat_only':
+      return {
+        icon: '🛶',
+        label: 'Boat / Cliff Only',
+        classes: 'border-slate-700 bg-slate-800/80 text-rose-300/90',
+      };
+    default:
+      return {
+        icon: '🥾',
+        label: 'Foot Trail',
+        classes: 'border-slate-700 bg-slate-800/80 text-slate-200',
+      };
+  }
+}
+
+function getSpotRankStyle(rank: number) {
+  if (rank <= 2) {
+    return {
+      pillClasses: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300',
+      dotColor: 'bg-emerald-400',
+      category: 'Top Ranked',
+    };
+  }
+  if (rank <= 4) {
+    return {
+      pillClasses: 'border-sky-500/30 bg-sky-500/15 text-sky-300',
+      dotColor: 'bg-sky-400',
+      category: 'Mid Ranked',
+    };
+  }
+  return {
+    pillClasses: 'border-amber-500/30 bg-amber-500/15 text-amber-300',
+    dotColor: 'bg-amber-400',
+    category: 'Secondary',
+  };
+}
+
 export default function HomePage() {
   const [mapStyle, setMapStyle] = useState<MapStyleMode>('satellite');
+  const [satelliteSource, setSatelliteSource] = useState<SatelliteSource>('pnoa');
+  const [glareDetected, setGlareDetected] = useState<boolean>(false);
   const [waterBodyPins, setWaterBodyPins] = useState<WaterBodyPinSummary[]>([]);
   const [activeWaterBody, setActiveWaterBody] =
     useState<WaterBodyPinSummary | null>(null);
@@ -38,9 +115,9 @@ export default function HomePage() {
   ]);
   const [rawScreenshotUrl, setRawScreenshotUrl] = useState<string>('');
   const [griddedPreviewUrl, setGriddedPreviewUrl] = useState<string>('');
-  const [anglerGearNote, setAnglerGearNote] = useState<string>(
-    'WETA+ No. 3 (7g), WETA No. 2 (5g), Texas-rigged Yubari Craw & Yubari Worm (100mm)'
-  );
+  const [capturedWaterMask, setCapturedWaterMask] =
+    useState<ClientWaterMaskSummary | null>(null);
+  const anglerGearNote: string | undefined = undefined;
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
 
   // Active Artifact & Saved Artifacts Gallery
@@ -111,7 +188,7 @@ export default function HomePage() {
     }
   };
 
-  // Step 1: User selects the area on the map -> creates screenshot -> sees screenshot on screen
+  // Step 1: User selects the area on the map -> always captures Satellite screenshot -> sees screenshot on screen
   const handleCaptureArea = async (params: {
     canvas: HTMLCanvasElement | null;
     cropBox: CropBoxPixels | null;
@@ -119,25 +196,46 @@ export default function HomePage() {
     waterBodyHint?: WaterBodyPinSummary | null;
   }) => {
     setSelectedBbox(params.bbox);
-    const rawUrl = await captureMapAreaScreenshot({
+    const captured = await captureMapAreaScreenshot({
       sourceCanvas: params.canvas,
       cropBox: params.cropBox,
       bbox: params.bbox,
       mapStyle,
+      satelliteSource,
       waterBodyLabel: params.waterBodyHint?.name,
     });
     const griddedUrl = await renderAnnotatedGridScreenshot({
-      rawScreenshotDataUrl: rawUrl,
+      rawScreenshotDataUrl: captured.dataUrl,
     });
-    setRawScreenshotUrl(rawUrl);
+    setGlareDetected(captured.glareDetected);
+    setCapturedWaterMask(captured.waterMask ?? null);
+    setRawScreenshotUrl(captured.dataUrl);
     setGriddedPreviewUrl(griddedUrl);
     setWorkflowStep('screenshot_preview');
+  };
+
+  const handleSwitchPreviewSatelliteSource = async (nextSource: SatelliteSource) => {
+    setSatelliteSource(nextSource);
+    const captured = await captureMapAreaScreenshot({
+      bbox: selectedBbox,
+      mapStyle: 'satellite',
+      satelliteSource: nextSource,
+      waterBodyLabel: activeWaterBody?.name,
+    });
+    const griddedUrl = await renderAnnotatedGridScreenshot({
+      rawScreenshotDataUrl: captured.dataUrl,
+    });
+    setGlareDetected(captured.glareDetected);
+    setCapturedWaterMask(captured.waterMask ?? null);
+    setRawScreenshotUrl(captured.dataUrl);
+    setGriddedPreviewUrl(griddedUrl);
   };
 
   // Step 2 & 3: User initiates analysis with AI -> AI recognizes water body + geography + Spain restrictions -> User receives annotated screenshot with points 1-6 + summary
   const handleInitiateAiAnalysis = async () => {
     if (!rawScreenshotUrl) return;
     setIsAnalyzing(true);
+    const showcaseStart = Date.now();
     try {
       const centerLng = (selectedBbox[0] + selectedBbox[2]) / 2;
       const centerLat = (selectedBbox[1] + selectedBbox[3]) / 2;
@@ -154,25 +252,36 @@ export default function HomePage() {
           griddedScreenshotBase64: griddedPreviewUrl,
           anglerGearNote,
           hintWaterBodyId: isNearActivePin ? activeWaterBody?.id : undefined,
+          clientWaterMask: capturedWaterMask,
         }),
       });
 
       const analysis: WaterBodyArtifactAnalysis = await res.json();
+      const spotsToRender =
+        analysis.has_fishable_water === false ? [] : analysis.recommended_spots;
 
       // Render numbered spot circles (1..6) + A1..H8 grid directly onto the 1024x1024 screenshot
       const annotatedUrl = await renderAnnotatedGridScreenshot({
         rawScreenshotDataUrl: rawScreenshotUrl,
-        spots: analysis.recommended_spots,
+        spots: spotsToRender,
       });
 
+      const elapsed = Date.now() - showcaseStart;
+      if (elapsed < MIN_ANALYSIS_SHOWCASE_MS) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, MIN_ANALYSIS_SHOWCASE_MS - elapsed)
+        );
+      }
+
+      const reportId = analysis.report_id || generateReportId();
+      const generatedAt = analysis.generated_at || formatReportTimestamp();
       const newArtifact: UserScreenshotArtifact = {
         id: `artifact-${Date.now()}`,
-        createdAt: new Date().toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
+        report_id: reportId,
+        createdAt: generatedAt,
         bbox: selectedBbox,
         mapStyle,
+        satelliteSource,
         anglerGearNote,
         rawScreenshotDataUrl: rawScreenshotUrl,
         annotatedScreenshotDataUrl: annotatedUrl,
@@ -180,7 +289,9 @@ export default function HomePage() {
       };
 
       setCurrentArtifact(newArtifact);
-      setSavedArtifacts((prev) => [newArtifact, ...prev]);
+      if (analysis.has_fishable_water !== false && spotsToRender.length > 0) {
+        setSavedArtifacts((prev) => [newArtifact, ...prev]);
+      }
       setWorkflowStep('artifact_ready');
     } finally {
       setIsAnalyzing(false);
@@ -202,17 +313,17 @@ export default function HomePage() {
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
       {/* Top Floating Header */}
-      <header className="fixed top-3 left-3 right-3 z-30 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-800/90 bg-slate-950/90 px-4 py-2.5 shadow-2xl backdrop-blur-md">
+      <header className="fixed top-3 left-3 right-3 z-50 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-800/90 bg-slate-950/90 px-4 py-2.5 shadow-2xl backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500 font-extrabold text-slate-950">
             FS
           </div>
           <div>
             <h1 className="text-sm font-bold text-white leading-tight">
-              Fishing Spot AI · España
+              Fishing Spot · Spain
             </h1>
             <p className="text-[11px] text-slate-400">
-              Select Water Body Area · AI Terrain, Road Access &amp; Spain Coto/Permit Advisor
+              Hydrographic Spot Finder · Terrain, Access &amp; Regulations
             </p>
           </div>
         </div>
@@ -227,7 +338,7 @@ export default function HomePage() {
             data-testid="water-body-search-input"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search Spain water body (e.g., Embalse de Cortes, Tous, Mequinenza, Albufera, Cijara)..."
+            placeholder="Search Spanish lake, river, or town..."
             className="w-full rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
           />
           <button
@@ -238,7 +349,7 @@ export default function HomePage() {
           </button>
         </form>
 
-        {/* Saved User Artifacts Switcher & Return to Map Button */}
+        {/* Saved User Artifacts Switcher */}
         <div className="flex items-center gap-2">
           {savedArtifacts.length > 0 && (
             <div
@@ -246,7 +357,7 @@ export default function HomePage() {
               className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-950/50 px-2.5 py-1 text-xs"
             >
               <span className="font-bold text-emerald-300">
-                🗂️ My Artifacts ({savedArtifacts.length}):
+                🗂️ Saved ({savedArtifacts.length}):
               </span>
               {savedArtifacts.slice(0, 3).map((art, idx) => (
                 <button
@@ -269,70 +380,106 @@ export default function HomePage() {
               ))}
             </div>
           )}
-
-          {workflowStep !== 'map_browse' && (
-            <button
-              type="button"
-              data-testid="analyze-another-waterbody-button"
-              onClick={() => setWorkflowStep('map_browse')}
-              className="rounded-xl border border-emerald-400 bg-emerald-500/20 px-3.5 py-1.5 text-xs font-bold text-emerald-200 hover:bg-emerald-500 hover:text-slate-950 transition"
-            >
-              🗺️ Navigate to Another Water Body
-            </button>
-          )}
         </div>
       </header>
 
-      {/* Interactive Map (Satellite / Terrain / Plain) — Clean screen without suggested spot chips */}
+      {/* Interactive Map (Satellite / Terrain) — Clean screen without suggested spot chips */}
       <FishingMap
         mapStyle={mapStyle}
         onChangeMapStyle={setMapStyle}
+        satelliteSource={satelliteSource}
+        onChangeSatelliteSource={setSatelliteSource}
         activeWaterBody={activeWaterBody}
         flyToTarget={flyToTarget}
         onCaptureArea={handleCaptureArea}
       />
 
-      {/* STEP 1 -> 2 MODAL: User Sees Captured Screenshot on Screen & Initiates AI Analysis */}
+      {/* STEP 1 -> 2 MODAL: Streamlined Satellite Area Preview */}
       {workflowStep === 'screenshot_preview' && (
         <section
           data-testid="screenshot-preview-panel"
           className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/85 p-4 pt-20 backdrop-blur-md overflow-y-auto"
         >
-          <div className="w-full max-w-2xl rounded-2xl border border-emerald-500/50 bg-slate-900 p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-2xl space-y-4">
+            {/* Minimalist Header */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
               <div>
-                <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-300">
-                  Step 1 Complete · Exact Cropped Area (1024×1024 High-DPI)
-                </span>
-                <h2 className="mt-1 text-base font-bold text-white">
-                  Selected Water Body Screenshot Preview
+                <h2 className="text-base font-bold text-white">
+                  Selected Area Preview
                 </h2>
+                <span
+                  data-testid="satellite-capture-badge"
+                  className="text-[11px] font-medium text-slate-400"
+                >
+                  🛰️ Satellite · {satelliteSource === 'pnoa' ? 'IGN PNOA HD' : 'Esri World'}
+                  {mapStyle === 'terrain' ? ' (Auto-switched from Terrain)' : ''}
+                </span>
               </div>
-              <button
-                type="button"
-                onClick={() => setWorkflowStep('map_browse')}
-                className="rounded-lg border border-slate-700 px-2.5 py-1 text-xs text-slate-300 hover:bg-slate-800"
-              >
-                ✕ Retake Selection
-              </button>
+
+              {/* Clear Segmented Imagery Selector */}
+              <div className="inline-flex items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-950/80 p-1">
+                <span className="px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Imagery:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchPreviewSatelliteSource('pnoa')}
+                  className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                    satelliteSource === 'pnoa'
+                      ? 'bg-sky-400 text-slate-950 shadow'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  IGN PNOA HD
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchPreviewSatelliteSource('esri')}
+                  className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                    satelliteSource === 'esri'
+                      ? 'bg-sky-400 text-slate-950 shadow'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  Esri World
+                </button>
+              </div>
             </div>
 
-            {/* Area Span & Scale Quality Guidance Banner */}
+            {/* Concise Area Span & Scale Evaluation */}
             <div
               data-testid="selection-scale-banner"
-              className={`rounded-xl border px-3.5 py-2 text-xs ${
-                previewScale.scaleMode === 'macro'
-                  ? 'border-amber-400/50 bg-amber-950/40 text-amber-200'
-                  : 'border-emerald-500/40 bg-emerald-950/30 text-emerald-200'
+              className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3.5 py-2 text-xs ${
+                previewScale.scaleMode === 'macro' || previewScale.isOverZoomed
+                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                  : 'border-slate-800 bg-slate-950/60 text-slate-200'
               }`}
             >
-              <div className="font-bold">📐 {previewScale.scaleLabel}</div>
-              <p className="mt-0.5 text-[11px] text-slate-300">
-                {previewScale.scaleMode === 'macro'
-                  ? 'You selected a wider area (>8 km). The AI will judge macro river channel bends, large peninsulas, and bay mouths. For finer bank/ledge detail, you can zoom in or drag a tighter box.'
-                  : 'High-resolution capture ready: AI will inspect underwater shelf color breaks, elevation slope, road access, and Spain fishing regulations for this exact sector.'}
-              </p>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-semibold text-emerald-400">
+                  📐 {previewScale.widthKm.toFixed(1)} × {previewScale.heightKm.toFixed(1)} km (~{previewScale.metersPerPixel} m/px)
+                </span>
+                <span className="text-slate-400">·</span>
+                <span className="text-[11px] text-slate-300">
+                  {previewScale.scaleAdvice}
+                </span>
+              </div>
+              {glareDetected && (
+                <span className="text-[11px] font-medium text-amber-300">
+                  ☀️ Surface glare detected — try switching imagery
+                </span>
+              )}
             </div>
+
+            {/* Low/No Surface Water Warning before running analysis */}
+            {capturedWaterMask && capturedWaterMask.waterCoveragePct < 0.8 && (
+              <div
+                data-testid="preview-no-water-warning"
+                className="rounded-xl border border-amber-500/50 bg-amber-950/40 px-3.5 py-2 text-xs text-amber-200"
+              >
+                ⚠️ <strong>Little surface water detected</strong> ({capturedWaterMask.waterCoveragePct}%). Ensure water is clearly visible inside the frame.
+              </div>
+            )}
 
             {/* Captured Screenshot with A1–H8 Grid Preview */}
             <div className="flex justify-center">
@@ -340,21 +487,7 @@ export default function HomePage() {
                 src={griddedPreviewUrl || rawScreenshotUrl}
                 alt="Selected Water Body Screenshot"
                 data-testid="captured-screenshot-preview"
-                className="max-h-[360px] w-auto rounded-xl border-2 border-slate-700 shadow-lg"
-              />
-            </div>
-
-            {/* Optional Tackle / Lure Note */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300">
-                Optional: Your Lures / Baits / Target Species (AI tailors &ldquo;How to fish it&rdquo;)
-              </label>
-              <input
-                type="text"
-                data-testid="angler-gear-input"
-                value={anglerGearNote}
-                onChange={(e) => setAnglerGearNote(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-emerald-400 focus:outline-none"
+                className="max-h-[380px] w-auto rounded-xl border border-slate-700/80 shadow-lg"
               />
             </div>
 
@@ -362,20 +495,25 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={() => setWorkflowStep('map_browse')}
-                className="rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+                className="rounded-xl border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
               >
-                Back to Map
+                ← Back to Map
               </button>
               <button
                 type="button"
                 data-testid="initiate-ai-analysis-button"
                 disabled={isAnalyzing}
                 onClick={handleInitiateAiAnalysis}
-                className="rounded-xl bg-emerald-500 px-6 py-2.5 text-sm font-extrabold text-slate-950 shadow-lg shadow-emerald-950/60 transition hover:bg-emerald-400 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2 text-sm font-bold text-slate-950 shadow-lg transition hover:bg-emerald-400 disabled:opacity-50"
               >
-                {isAnalyzing
-                  ? '🔍 AI Analyzing Terrain, Altitude, Roads & Spain Regulations...'
-                  : '🤖 Analyze with AI'}
+                {isAnalyzing ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
+                    <span>Analyzing Location...</span>
+                  </>
+                ) : (
+                  <span>Analyze Location</span>
+                )}
               </button>
             </div>
           </div>
@@ -392,43 +530,110 @@ export default function HomePage() {
             {/* Artifact Header */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-bold uppercase text-emerald-300">
-                    ✓ User Fishing Artifact Saved
-                  </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {currentArtifact.analysis.has_fishable_water === false ? (
+                    <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-bold uppercase text-amber-300">
+                      ⚠️ No Fishable Water Detected
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
+                      ✓ Location Analysis Ready
+                    </span>
+                  )}
                   <span className="text-xs text-slate-400">
                     {currentArtifact.analysis.region_label}
+                  </span>
+                  <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] text-slate-300">
+                    {currentArtifact.analysis.report_id || currentArtifact.report_id}
+                  </span>
+                  <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] text-sky-300">
+                    v{currentArtifact.analysis.app_version || APP_VERSION}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {currentArtifact.analysis.generated_at || currentArtifact.createdAt}
                   </span>
                 </div>
                 <h2
                   data-testid="recognized-water-body-name"
-                  className="mt-1 text-xl font-extrabold text-white"
+                  className="mt-1 text-xl font-bold tracking-tight text-white"
                 >
                   {currentArtifact.analysis.water_body_name}
                 </h2>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  data-testid="download-artifact-button"
-                  onClick={() => handleDownloadArtifactImage(currentArtifact)}
-                  className="rounded-xl border border-emerald-400 bg-emerald-950/80 px-3.5 py-2 text-xs font-bold text-emerald-200 hover:bg-emerald-900"
-                >
-                  ⬇️ Download Annotated Screenshot (PNG)
-                </button>
+                {currentArtifact.analysis.has_fishable_water !== false &&
+                  currentArtifact.analysis.recommended_spots.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        data-testid="download-pdf-report-button"
+                        onClick={() => downloadOnePageFishingPdfReport(currentArtifact)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-700 hover:text-white transition"
+                      >
+                        <span>📄</span> PDF Report
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="download-artifact-button"
+                        onClick={() => handleDownloadArtifactImage(currentArtifact)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-700 hover:text-white transition"
+                      >
+                        <span>🖼️</span> Map PNG
+                      </button>
+                    </>
+                  )}
                 <button
                   type="button"
                   data-testid="artifact-back-to-map-button"
                   onClick={() => setWorkflowStep('map_browse')}
-                  className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-extrabold text-slate-950 hover:bg-emerald-400"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/15 px-3.5 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500 hover:text-slate-950 transition"
                 >
-                  🗺️ Analyze Another Water Body on Map
+                  {currentArtifact.analysis.has_fishable_water === false
+                    ? '← Reposition Map'
+                    : '← Change Location'}
                 </button>
               </div>
             </div>
 
-            {/* Two-Column Artifact Layout */}
+            {currentArtifact.analysis.has_fishable_water === false ? (
+              <div
+                data-testid="no-water-detected-banner"
+                className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-12 items-start"
+              >
+                <div className="lg:col-span-5 overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-slate-950 shadow-2xl">
+                  <img
+                    src={currentArtifact.annotatedScreenshotDataUrl}
+                    alt="Captured Area Without Fishable Water"
+                    data-testid="annotated-artifact-screenshot"
+                    className="w-full h-auto object-contain"
+                  />
+                </div>
+                <div className="lg:col-span-7 space-y-4 rounded-2xl border border-amber-500/40 bg-amber-950/25 p-5">
+                  <h3 className="text-lg font-extrabold text-amber-300">
+                    No Fishable Water Body Found in This Screenshot
+                  </h3>
+                  <p className="text-sm leading-relaxed text-slate-200">
+                    {currentArtifact.analysis.no_water_reason ||
+                      currentArtifact.analysis.water_body_summary}
+                  </p>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 text-xs text-slate-300 space-y-1.5">
+                    <p className="font-bold text-white">Why no spots were placed:</p>
+                    <p>
+                      To avoid hallucinating fishing spots on forests, hills, or dirt roads, spots and 1-page PDF reports are only generated when an actual river, reservoir, lake, pond, or coastline is verified inside the selected area.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setWorkflowStep('map_browse')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-amber-300 transition"
+                  >
+                    <span>←</span> Reposition Map Over Water
+                  </button>
+                </div>
+              </div>
+            ) : (
+            /* Two-Column Artifact Layout */
             <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-12">
               {/* Left Column: Annotated Screenshot Artifact + Geography & Spain Regulations Cards */}
               <div className="lg:col-span-5 flex flex-col space-y-3">
@@ -442,69 +647,132 @@ export default function HomePage() {
                 </div>
 
                 {/* Grid Legend */}
-                <div className="w-full rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-300 space-y-1">
-                  <p className="font-bold text-slate-200">
-                    📌 Grid Screenshot Legend:
+                <div className="w-full rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-300 space-y-1.5">
+                  <p className="font-semibold text-slate-300 text-[11px] tracking-wide uppercase">
+                    Spot Rank &amp; Structure Legend
                   </p>
-                  <div className="flex flex-wrap gap-3 pt-1 text-[11px]">
-                    <span className="flex items-center gap-1.5">
-                      <span className="inline-block h-3 w-3 rounded-full bg-[#ef4444]" />
-                      <strong>🔴 1–2:</strong> Trophy Point / Shelf Edge
+                  <div className="flex flex-wrap items-center gap-3.5 text-xs">
+                    <span className="inline-flex items-center gap-1.5 text-slate-200">
+                      <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]" />
+                      <strong className="text-emerald-400 font-semibold">1–2:</strong> Top Ranked
                     </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="inline-block h-3 w-3 rounded-full bg-[#29b6f6]" />
-                      <strong>🔵 3–4:</strong> Sheltered Bay / Road Access
+                    <span className="inline-flex items-center gap-1.5 text-slate-200">
+                      <span className="h-2.5 w-2.5 rounded-full bg-[#0ea5e9]" />
+                      <strong className="text-sky-400 font-semibold">3–4:</strong> Mid Ranked
                     </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="inline-block h-3 w-3 rounded-full bg-[#f59e0b]" />
-                      <strong>🟠 5–6:</strong> Canyon S-Bend / Gateway
+                    <span className="inline-flex items-center gap-1.5 text-slate-200">
+                      <span className="h-2.5 w-2.5 rounded-full bg-[#eab308]" />
+                      <strong className="text-amber-400 font-semibold">5–6:</strong> Secondary
                     </span>
                   </div>
                 </div>
 
-                {/* ⛰️ Geographical Features: Altitude, Road Availability & Shore Accessibility */}
+                {/* Fish Species Present in This Water Body */}
+                {currentArtifact.analysis.species_present &&
+                  currentArtifact.analysis.species_present.length > 0 && (
+                    <div
+                      data-testid="species-present-card"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 text-xs space-y-2"
+                    >
+                      <h3 className="font-semibold text-slate-200 tracking-wide">
+                        Fish Species Present
+                      </h3>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {currentArtifact.analysis.species_present.map((sp) => (
+                          <div
+                            key={sp.name}
+                            className="rounded-lg border border-slate-800/80 bg-slate-950/60 p-2 space-y-0.5"
+                          >
+                            <div className="font-semibold text-slate-100 text-[11px]">
+                              {sp.name}
+                            </div>
+                            <p className="text-[10px] text-slate-400">
+                              <span className="text-slate-500 font-medium">Zone:</span> {sp.habitat_zone}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              <span className="text-slate-500 font-medium">Tactics:</span> {sp.recommended_approach}
+                            </p>
+                            {sp.regulation_note && (
+                              <p className="text-[10px] text-amber-300/90 font-medium">
+                                ⚖️ {sp.regulation_note}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                {/* Geographical Features: Altitude, Road Availability & Shore Accessibility */}
                 {currentArtifact.analysis.geographical_context && (
                   <div
                     data-testid="geographical-context-card"
-                    className="w-full rounded-xl border border-sky-500/40 bg-sky-950/25 p-3.5 text-xs space-y-1.5"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 text-xs space-y-1.5"
                   >
                     <div className="flex items-center justify-between">
-                      <h3 className="font-extrabold text-sky-300">
-                        ⛰️ Geography, Altitude &amp; Shore Access
+                      <h3 className="font-semibold text-slate-200 tracking-wide">
+                        Geography &amp; Shore Access
                       </h3>
-                      <span className="rounded bg-sky-500/20 px-2 py-0.5 font-mono text-[11px] font-bold text-sky-200">
-                        {currentArtifact.analysis.geographical_context.water_elevation_m}m ASL (Δ+{currentArtifact.analysis.geographical_context.relief_range_m}m)
+                      <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-300 border border-slate-700/60">
+                        ~{currentArtifact.analysis.geographical_context.water_elevation_m}m ASL DEM est. (Δ+{currentArtifact.analysis.geographical_context.relief_range_m}m)
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-200">
-                      <strong className="text-sky-200">🛣️ Road Access:</strong>{' '}
+                    <p className="text-[11px] text-slate-300">
+                      <strong className="text-slate-200">Road Access:</strong>{' '}
                       {currentArtifact.analysis.geographical_context.road_access_summary}
                     </p>
-                    <p className="text-[11px] text-slate-200">
-                      <strong className="text-sky-200">🥾 Shore Steepness:</strong>{' '}
+                    <p className="text-[11px] text-slate-300">
+                      <strong className="text-slate-200">Shore Terrain:</strong>{' '}
                       {currentArtifact.analysis.geographical_context.shore_accessibility_summary}
                     </p>
                   </div>
                 )}
 
-                {/* ⚖️ Spain Fishing Regulations & Restricted Area Lookup */}
+                {/* Imagery Freshness & Extraction Honesty Notice */}
+                {(currentArtifact.analysis.imagery_freshness_note ||
+                  (currentArtifact.analysis.extraction_limitations &&
+                    currentArtifact.analysis.extraction_limitations.length > 0)) && (
+                  <div
+                    data-testid="imagery-honesty-card"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 text-xs space-y-1.5"
+                  >
+                    <h3 className="font-semibold text-slate-200 tracking-wide">
+                      Satellite Resolution &amp; Seasonal Flora Note
+                    </h3>
+                    {currentArtifact.analysis.imagery_freshness_note && (
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        {currentArtifact.analysis.imagery_freshness_note}
+                      </p>
+                    )}
+                    {currentArtifact.analysis.extraction_limitations &&
+                      currentArtifact.analysis.extraction_limitations.length > 0 && (
+                        <ul className="list-disc pl-4 space-y-0.5 text-[10px] text-amber-300/90">
+                          {currentArtifact.analysis.extraction_limitations.map((lim, li) => (
+                            <li key={li}>{lim}</li>
+                          ))}
+                        </ul>
+                      )}
+                  </div>
+                )}
+
+                {/* Spain Fishing Regulations & Restricted Area Lookup */}
                 {currentArtifact.analysis.restriction_check && (
                   <div
                     data-testid="restriction-check-card"
-                    className="w-full rounded-xl border border-amber-500/40 bg-amber-950/25 p-3.5 text-xs space-y-2"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 text-xs space-y-2"
                   >
-                    <h3 className="font-extrabold text-amber-300">
-                      ⚖️ Spain Fishing Regulations &amp; Restrictions Check
+                    <h3 className="font-semibold text-slate-200 tracking-wide">
+                      Spain Fishing Regulations &amp; Allowed Check
                     </h3>
-                    <div className="rounded-lg bg-slate-950/80 px-2.5 py-1.5 font-bold text-amber-200 text-[11px]">
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 font-medium text-amber-200 text-[11px]">
                       {currentArtifact.analysis.restriction_check.status_label}
                     </div>
-                    <p className="text-[11px] text-slate-200">
-                      <strong className="text-amber-200">🪪 Permits:</strong>{' '}
+                    <p className="text-[11px] text-slate-300">
+                      <strong className="text-slate-200">Permits:</strong>{' '}
                       {currentArtifact.analysis.restriction_check.permits_required}
                     </p>
-                    <p className="text-[11px] text-rose-200">
-                      <strong className="text-rose-300">🚫 Restricted / Safety Zones:</strong>{' '}
+                    <p className="text-[11px] text-rose-300">
+                      <strong className="text-rose-400">Restricted / Safety Zones:</strong>{' '}
                       {currentArtifact.analysis.restriction_check.prohibited_zones_warning}
                     </p>
                     <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-300">
@@ -514,7 +782,7 @@ export default function HomePage() {
                         )
                       )}
                     </ul>
-                    <p className="text-[10px] text-slate-400 italic border-t border-slate-800 pt-1.5">
+                    <p className="text-[10px] text-slate-400 italic border-t border-slate-800/80 pt-1.5">
                       {currentArtifact.analysis.restriction_check.disclaimer}
                     </p>
                   </div>
@@ -523,71 +791,178 @@ export default function HomePage() {
 
               {/* Right Column: Tactical Summary (🎯 Where to Fish on the Grid + 🚗 Best Game Plan) */}
               <div className="lg:col-span-7 space-y-5 max-h-[78vh] overflow-y-auto pr-1">
-                <div data-testid="where-to-fish-summary" className="space-y-4">
-                  <h3 className="text-base font-extrabold text-white">
-                    🎯 Where to Fish on the Grid:
-                  </h3>
+                <div data-testid="where-to-fish-summary" className="space-y-3.5">
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200">
+                      🎯 Where to Fish on the Grid:
+                    </h3>
+                    <span className="text-xs text-slate-400 font-mono">
+                      {currentArtifact.analysis.recommended_spots.length} Coordinates
+                    </span>
+                  </div>
 
-                  {currentArtifact.analysis.recommended_spots.map((spot) => {
-                    const emoji =
-                      spot.color === 'red'
-                        ? '🔴'
-                        : spot.color === 'blue'
-                          ? '🔵'
-                          : '🟠';
+                  {(() => {
+                    const spots = currentArtifact.analysis.recommended_spots;
+                    const hasTiers = spots.length >= 4;
+                    const topSpots = hasTiers ? spots.filter((s) => s.rank <= 3) : spots;
+                    const secondarySpots = hasTiers ? spots.filter((s) => s.rank > 3) : [];
+
+                    const renderCard = (spot: (typeof spots)[0], isTop: boolean) => {
+                      const rankStyle = getSpotRankStyle(spot.rank);
+                      const accessBadge = formatAccessBadge(spot.access_mode);
+                      const cleanTitle = cleanSpotTitle(
+                        spot.title,
+                        currentArtifact.analysis.water_body_name
+                      );
+                      const cleanWhy = cleanSpotText(
+                        spot.why_this_spot || spot.rating_justification || ''
+                      );
+                      const cleanTactics = cleanSpotText(spot.how_to_fish || '');
+                      const cleanAccess = cleanSpotText(spot.access_summary || '');
+
+                      return (
+                        <article
+                          key={spot.rank}
+                          data-testid={`artifact-spot-${spot.rank}`}
+                          className={`group rounded-xl border p-4 transition-all space-y-3 text-xs leading-relaxed ${
+                            isTop
+                              ? 'border-emerald-500/40 bg-gradient-to-br from-slate-900 to-slate-950 hover:border-emerald-400'
+                              : 'border-slate-800/80 bg-slate-900/60 hover:border-slate-700'
+                          }`}
+                        >
+                          {/* Header: Rank Pill + Title + Coordinate + Target + Access */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/60 pb-2.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[11px] font-bold ${rankStyle.pillClasses}`}
+                              >
+                                <span className={`h-2 w-2 rounded-full ${rankStyle.dotColor}`} />
+                                Spot {spot.rank}
+                              </span>
+                              {typeof spot.rating === 'number' && (
+                                <span
+                                  data-testid={`spot-rating-${spot.rank}`}
+                                  className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[11px] font-bold text-amber-300"
+                                >
+                                  ★ {spot.rating.toFixed(1)}/10
+                                </span>
+                              )}
+                              <h4 className="text-sm font-semibold text-slate-100">
+                                {cleanTitle}
+                              </h4>
+                              <span className="font-mono text-xs text-sky-300 font-semibold">
+                                [Grid {spot.cell_id}]
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px]">
+                              {spot.target_species && spot.target_species.length > 0 && (
+                                <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-950/40 px-2 py-0.5 font-medium text-emerald-300">
+                                  <span className="text-slate-400">Target:</span>{' '}
+                                  {spot.target_species.join(', ')}
+                                </span>
+                              )}
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-medium ${accessBadge.classes}`}
+                              >
+                                <span>{accessBadge.icon}</span>
+                                <span>{accessBadge.label}</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Human-focused Why this spot paragraph */}
+                          <div
+                            data-testid={`spot-justification-${spot.rank}`}
+                            className="text-xs text-slate-300 leading-relaxed"
+                          >
+                            <strong className="text-emerald-400 font-semibold">
+                              Why this spot:
+                            </strong>{' '}
+                            {cleanWhy}
+                          </div>
+
+                          {/* How to fish / Tactics */}
+                          {cleanTactics && (
+                            <div className="rounded-lg border border-slate-800/80 bg-slate-950/60 p-2.5 text-xs text-slate-200 leading-relaxed">
+                              <strong className="text-emerald-400 font-semibold">
+                                How to fish:
+                              </strong>{' '}
+                              {cleanTactics}
+                            </div>
+                          )}
+
+                          {/* Compact Structure & Access details */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-400 border-t border-slate-800/50 pt-2">
+                            {spot.depth_structure && (
+                              <div className="flex items-center gap-1">
+                                <strong className="text-slate-300 font-medium">Structure:</strong>
+                                <span>{cleanSpotText(spot.depth_structure)}</span>
+                                <span
+                                  title="Depths inferred from satellite shoreline topography; verify local bank footing on site"
+                                  className="cursor-help text-slate-500 hover:text-slate-300"
+                                >
+                                  ⓘ
+                                </span>
+                              </div>
+                            )}
+                            {cleanAccess && (
+                              <div className="flex items-center gap-1">
+                                <strong className="text-slate-300 font-medium">Access &amp; Road Surface:</strong>
+                                <span>{cleanAccess}</span>
+                              </div>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    };
 
                     return (
-                      <article
-                        key={spot.rank}
-                        data-testid={`artifact-spot-${spot.rank}`}
-                        className="rounded-xl border border-slate-800 bg-slate-950/80 p-4 space-y-2 text-xs leading-relaxed"
-                      >
-                        <h4 className="text-sm font-bold text-white">
-                          {emoji} Spot {spot.rank}: {spot.title} (
-                          {spot.grid_cells_label}){' '}
-                          {spot.badge && (
-                            <span className="text-amber-300">{spot.badge}</span>
-                          )}
-                        </h4>
+                      <div className="space-y-5">
+                        {hasTiers ? (
+                          <>
+                            {/* Tier 1 Header */}
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between border-b border-emerald-500/30 pb-1.5">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                                  <span>🏆</span> Top Recommended Spots (#1–#3)
+                                </h4>
+                                <span className="text-[11px] text-emerald-300/80 font-mono">
+                                  High-Percentage Ambush Zones
+                                </span>
+                              </div>
+                              {topSpots.map((spot) => renderCard(spot, true))}
+                            </div>
 
-                        <p className="text-slate-200">
-                          <strong className="text-emerald-300">
-                            {spot.why_label}
-                          </strong>{' '}
-                          {spot.why_this_spot}
-                        </p>
-
-                        {spot.secondary_label && spot.secondary_text && (
-                          <p className="text-slate-200">
-                            <strong className="text-sky-300">
-                              {spot.secondary_label}
-                            </strong>{' '}
-                            {spot.secondary_text}
-                          </p>
+                            {/* Tier 2 Header */}
+                            <div className="space-y-3 pt-2">
+                              <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                                  <span>📍</span> Secondary &amp; Shoreline Spots (#4–#6)
+                                </h4>
+                                <span className="text-[11px] text-slate-400 font-mono">
+                                  Low-Light Roamers &amp; Warm-up Access
+                                </span>
+                              </div>
+                              {secondarySpots.map((spot) => renderCard(spot, false))}
+                            </div>
+                          </>
+                        ) : (
+                          spots.map((spot) => renderCard(spot, spot.rank <= 2))
                         )}
-
-                        {spot.how_to_fish && (
-                          <p className="text-slate-200">
-                            <strong className="text-amber-300">
-                              How to fish it:
-                            </strong>{' '}
-                            {spot.how_to_fish}
-                          </p>
-                        )}
-                      </article>
+                      </div>
                     );
-                  })}
+                  })()}
                 </div>
 
-                {/* 🚗 Best Game Plan for This Area */}
+                {/* Best Game Plan for This Area */}
                 <div
                   data-testid="best-game-plan-summary"
-                  className="rounded-2xl border border-emerald-500/40 bg-emerald-950/30 p-4 space-y-2.5"
+                  className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-2.5"
                 >
-                  <h3 className="text-sm font-extrabold text-emerald-300">
+                  <h3 className="text-sm font-semibold text-slate-100 tracking-wide">
                     🚗 Best Game Plan for This Area:
                   </h3>
-                  <ul className="list-disc pl-5 space-y-1.5 text-xs leading-relaxed text-slate-100">
+                  <ul className="list-disc pl-5 space-y-1.5 text-xs leading-relaxed text-slate-300">
                     {currentArtifact.analysis.best_game_plan.map((step, i) => (
                       <li key={i}>{step}</li>
                     ))}
@@ -595,9 +970,16 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
+            )}
           </div>
         </section>
       )}
+
+      {/* Preparation State Stepper (Angler Wisdom & Hydrographic Intelligence) */}
+      <AnalysisProgressDialog
+        isOpen={isAnalyzing}
+        waterBodyLabel={activeWaterBody?.name}
+      />
     </main>
   );
 }

@@ -3,18 +3,34 @@
   "title": "SpotRecommendationResponse",
   "type": "object",
   "required": [
+    "has_fishable_water",
     "water_body_name",
     "region_label",
     "water_body_summary",
+    "species_present",
     "geographical_context",
     "restriction_check",
     "recommended_spots",
     "best_game_plan"
   ],
   "properties": {
+    "has_fishable_water": {
+      "type": "boolean",
+      "description": "True only when a genuine fishable river, lake, reservoir, pond, or sea shoreline is visible inside the captured area; false if the screenshot contains dry terrain only."
+    },
+    "water_coverage_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Estimated percentage (0-100) of the screenshot covered by surface water."
+    },
+    "no_water_reason": {
+      "type": "string",
+      "description": "Plain-English explanation shown when has_fishable_water is false (e.g., forested hills and dirt tracks with no visible river or reservoir)."
+    },
     "water_body_name": {
       "type": "string",
-      "description": "Recognized name of the water body."
+      "description": "Recognized official name of the water body."
     },
     "region_label": {
       "type": "string",
@@ -22,7 +38,53 @@
     },
     "water_body_summary": {
       "type": "string",
-      "description": "Overview of the water body, scale of analysis, and target species."
+      "description": "Concise 2-sentence practical overview covering water type, elevation, clarity/depth profile, and overall access."
+    },
+    "imagery_freshness_note": {
+      "type": "string",
+      "description": "Honest note stating that satellite imagery is a historical snapshot; permanent structures remain stable while aquatic flora, water level, and sun shadows vary seasonally."
+    },
+    "extraction_limitations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Honest list of visibility, scale, glare, turbidity, or fallback limitations affecting feature extraction."
+    },
+    "screenshot_feature_inventory": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "point",
+          "flat",
+          "drop_off",
+          "channel",
+          "shadow",
+          "cover",
+          "depth_change",
+          "weed_line",
+          "weed_edge",
+          "current_break",
+          "bottom_transition",
+          "multiple_points"
+        ]
+      },
+      "description": "Canonical angler features observed anywhere across the captured water body screenshot."
+    },
+    "species_present": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 8,
+      "description": "Fish species known to inhabit this water body with practical local context.",
+      "items": {
+        "type": "object",
+        "required": ["name", "habitat_zone", "recommended_approach"],
+        "properties": {
+          "name": { "type": "string" },
+          "habitat_zone": { "type": "string" },
+          "recommended_approach": { "type": "string" },
+          "regulation_note": { "type": "string" }
+        }
+      }
     },
     "geographical_context": {
       "type": "object",
@@ -36,6 +98,7 @@
       "properties": {
         "water_elevation_m": { "type": "number" },
         "relief_range_m": { "type": "number" },
+        "scale_mode": { "type": "string", "enum": ["micro", "meso", "macro"] },
         "scale_label": { "type": "string" },
         "road_access_summary": { "type": "string" },
         "shore_accessibility_summary": { "type": "string" }
@@ -73,7 +136,7 @@
     },
     "recommended_spots": {
       "type": "array",
-      "minItems": 6,
+      "minItems": 0,
       "maxItems": 6,
       "items": {
         "type": "object",
@@ -85,37 +148,126 @@
           "title",
           "x_percent",
           "y_percent",
+          "target_species",
+          "access_mode",
+          "access_summary",
+          "depth_structure",
           "why_label",
           "why_this_spot",
-          "how_to_fish"
+          "how_to_fish",
+          "stacked_x_count",
+          "influencing_features",
+          "why_rank_summary"
         ],
         "properties": {
           "rank": { "type": "integer", "minimum": 1, "maximum": 6 },
-          "color": { "type": "string", "enum": ["red", "blue", "orange"] },
+          "color": { "type": "string", "enum": ["green", "blue", "yellow", "red", "orange"] },
           "cell_id": {
             "type": "string",
             "pattern": "^[A-H][1-8]$"
           },
-          "grid_cells_label": {
-            "type": "string"
-          },
-          "badge": {
-            "type": "string"
-          },
+          "grid_cells_label": { "type": "string" },
+          "badge": { "type": "string" },
           "title": { "type": "string" },
           "x_percent": { "type": "number", "minimum": 2, "maximum": 98 },
           "y_percent": { "type": "number", "minimum": 2, "maximum": 98 },
+          "target_species": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          },
+          "access_mode": {
+            "type": "string",
+            "enum": ["car_asphalt", "dirt_track", "hike_in", "boat_only"]
+          },
+          "access_summary": { "type": "string" },
+          "depth_structure": { "type": "string" },
           "why_label": { "type": "string" },
           "why_this_spot": { "type": "string" },
           "secondary_label": { "type": "string" },
           "secondary_text": { "type": "string" },
-          "how_to_fish": { "type": "string" }
+          "how_to_fish": { "type": "string" },
+          "stacked_x_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Number of overlapping desirable features present at this spot ('Multiple X's')."
+          },
+          "influencing_features": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": { "type": "string" },
+            "description": "Specific ecological features that stack here (e.g. ['Underwater Point', 'Drop-off / Shelf', 'Submerged Weed Line', 'Deep Water Safety'])."
+          },
+          "why_rank_summary": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": { "type": "string" },
+            "description": "Concise bullet points explaining why this spot achieved its rank, especially why #1 is #1."
+          },
+          "extracted_features": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "description": "Canonical angler features extracted from the screenshot at this spot with observation type and visual cue.",
+            "items": {
+              "type": "object",
+              "required": ["feature", "observation_type", "visual_cue"],
+              "properties": {
+                "feature": {
+                  "type": "string",
+                  "enum": [
+                    "point",
+                    "flat",
+                    "drop_off",
+                    "channel",
+                    "shadow",
+                    "cover",
+                    "depth_change",
+                    "weed_line",
+                    "weed_edge",
+                    "current_break",
+                    "bottom_transition",
+                    "multiple_points"
+                  ]
+                },
+                "observation_type": {
+                  "type": "string",
+                  "enum": ["directly_visible", "topographic_inference"]
+                },
+                "visual_cue": { "type": "string" },
+                "is_seasonal_or_dynamic": { "type": "boolean" }
+              }
+            }
+          },
+          "rating": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Deterministic 1.0-10.0 rating derived from the extracted features and convergence."
+          },
+          "rating_tier": {
+            "type": "string",
+            "enum": [
+              "Prime Convergence",
+              "Strong Structure",
+              "Solid Candidate",
+              "Moderate / Inferred Candidate",
+              "Single-Feature / Limited"
+            ]
+          },
+          "rating_justification": {
+            "type": "string",
+            "description": "Short 1-2 sentence report summary explaining which extracted features earned this rating and any seasonal/visibility caveats."
+          }
         }
       }
     },
     "best_game_plan": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 0,
       "maxItems": 5,
       "items": { "type": "string" }
     }

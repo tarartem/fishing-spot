@@ -1,6 +1,6 @@
 {
   "name": "fishing-spot",
-  "version": "0.1.0",
+  "version": "0.3.1",
   "private": true,
   "description": "AI Fishing Spot Advisor & Angler Community ($0 MVP, Agent-First SDD)",
   "scripts": {
@@ -25,9 +25,12 @@
     "@turf/circle": "^7.2.0",
     "@turf/distance": "^7.2.0",
     "@turf/helpers": "^7.2.0",
+    "@turf/nearest-point-on-line": "^7.4.0",
+    "@turf/point-to-line-distance": "^7.4.0",
     "@turf/square-grid": "^7.2.0",
     "ajv": "^8.17.1",
     "drizzle-orm": "^0.40.0",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.487.0",
     "maplibre-gl": "^5.2.0",
     "next": "^15.2.4",

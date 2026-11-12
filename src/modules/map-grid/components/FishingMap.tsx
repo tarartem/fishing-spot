@@ -5,6 +5,7 @@ import maplibregl, { type StyleSpecification } from 'maplibre-gl';
 import type {
   BoundingBox,
   MapStyleMode,
+  SatelliteSource,
   WaterBodyPinSummary,
 } from '@/shared/types/domain';
 import type { CropBoxPixels } from '@/modules/map-grid/screenshot-compositor';
@@ -12,6 +13,8 @@ import type { CropBoxPixels } from '@/modules/map-grid/screenshot-compositor';
 interface FishingMapProps {
   mapStyle: MapStyleMode;
   onChangeMapStyle: (style: MapStyleMode) => void;
+  satelliteSource: SatelliteSource;
+  onChangeSatelliteSource: (source: SatelliteSource) => void;
   activeWaterBody: WaterBodyPinSummary | null;
   flyToTarget?: { lng: number; lat: number; zoom?: number; label?: string } | null;
   onCaptureArea: (params: {
@@ -22,10 +25,10 @@ interface FishingMapProps {
   }) => void;
 }
 
-function getMapStyleConfig(mode: MapStyleMode): string | StyleSpecification {
-  if (mode === 'plain') {
-    return 'https://tiles.openfreemap.org/styles/liberty';
-  }
+function getMapStyleConfig(
+  mode: MapStyleMode,
+  satelliteSource: SatelliteSource
+): StyleSpecification {
   if (mode === 'terrain') {
     return {
       version: 8,
@@ -48,7 +51,34 @@ function getMapStyleConfig(mode: MapStyleMode): string | StyleSpecification {
       ],
     };
   }
-  // Satellite (ESRI World Imagery free tiles)
+
+  if (satelliteSource === 'pnoa') {
+    return {
+      version: 8,
+      sources: {
+        pnoa: {
+          type: 'raster',
+          scheme: 'tms',
+          tiles: [
+            'https://tms-pnoa-ma.idee.es/1.0.0/pnoa-ma/{z}/{x}/{y}.jpeg',
+          ],
+          tileSize: 256,
+          attribution: '© IGN PNOA Máxima Actualidad (Spain)',
+        },
+      },
+      layers: [
+        {
+          id: 'pnoa-layer',
+          type: 'raster',
+          source: 'pnoa',
+          minzoom: 0,
+          maxzoom: 20,
+        },
+      ],
+    };
+  }
+
+  // Satellite Alternate (ESRI World Imagery free tiles)
   return {
     version: 8,
     sources: {
@@ -76,6 +106,8 @@ function getMapStyleConfig(mode: MapStyleMode): string | StyleSpecification {
 export function FishingMap({
   mapStyle,
   onChangeMapStyle,
+  satelliteSource,
+  onChangeSatelliteSource,
   activeWaterBody,
   flyToTarget,
   onCaptureArea,
@@ -97,9 +129,9 @@ export function FishingMap({
     try {
       const map = new maplibregl.Map({
         container: mapContainerRef.current,
-        style: getMapStyleConfig(mapStyle),
-        center: [-0.946, 39.242], // Spain default view (Valencia interior reservoirs)
-        zoom: 13.2,
+        style: getMapStyleConfig(mapStyle, satelliteSource),
+        center: [-0.935, 39.248], // Embalse de Cortes main reservoir basin (Valencia, Spain)
+        zoom: 13.4,
         canvasContextAttributes: { preserveDrawingBuffer: true },
         attributionControl: false,
       });
@@ -122,15 +154,15 @@ export function FishingMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switch between Satellite, Terrain, and Plain map styles
+  // Switch between Satellite (PNOA / Esri) and Terrain map styles
   useEffect(() => {
     if (!mapRef.current) return;
     try {
-      mapRef.current.setStyle(getMapStyleConfig(mapStyle));
+      mapRef.current.setStyle(getMapStyleConfig(mapStyle, satelliteSource));
     } catch {
       // Ignore in headless environment
     }
-  }, [mapStyle]);
+  }, [mapStyle, satelliteSource]);
 
   // Fly to searched location in Spain when user selects a search result
   useEffect(() => {
@@ -285,17 +317,17 @@ export function FishingMap({
             data-testid="target-reticle-box"
             className="h-[64vh] w-[64vh] max-w-[85vw] max-h-[65vw] rounded-2xl border-2 border-dashed border-white/35 shadow-[0_0_0_9999px_rgba(2,6,23,0.22)] flex flex-col justify-end p-3"
           >
-            <div className="text-[11px] text-slate-200/90 bg-slate-950/75 px-3 py-1 rounded-lg self-center text-center">
-              Frame water body inside box or use <strong>✂️ Select Area (Drag Box)</strong> for exact sector crop
+            <div className="text-[11px] font-medium text-slate-200/90 bg-slate-950/75 px-3 py-1 rounded-lg self-center text-center">
+              Frame your fishing area
             </div>
           </div>
         </div>
       )}
 
-      {/* Clean Floating Map Controls: Map Style Switcher (Top-Left) + Area Selection Bar (Bottom-Center) */}
+      {/* Clean Floating Map Controls: Map Style Switcher (Satellite | Terrain) + Satellite Provider + Area Selection Bar */}
       <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-4 pt-20">
-        {/* Top Controls: Map Layer Switcher (Satellite | Terrain | Plain) — No suggested spot chips */}
-        <div className="flex items-center gap-2">
+        {/* Top Controls: 2-Mode Map Switcher + Satellite Source Switch (PNOA Spain HD vs Esri Alt) */}
+        <div className="flex flex-wrap items-center gap-2">
           <div
             data-testid="map-style-switcher"
             className="pointer-events-auto inline-flex items-center rounded-xl border border-slate-700/90 bg-slate-950/90 p-1 shadow-xl backdrop-blur-md"
@@ -304,7 +336,6 @@ export function FishingMap({
               [
                 { id: 'satellite', label: '🛰️ Satellite' },
                 { id: 'terrain', label: '⛰️ Terrain' },
-                { id: 'plain', label: '🗺️ Plain Map' },
               ] as const
             ).map((mode) => (
               <button
@@ -322,36 +353,71 @@ export function FishingMap({
               </button>
             ))}
           </div>
+
+          <div
+            data-testid="satellite-source-switcher"
+            className="pointer-events-auto inline-flex items-center gap-1 rounded-xl border border-slate-700/90 bg-slate-950/90 p-1 shadow-xl backdrop-blur-md"
+            title="Switch satellite flight imagery to reduce sun glare or view different water levels"
+          >
+            <span className="px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Imagery:
+            </span>
+            {(
+              [
+                { id: 'pnoa', label: '🛰️ PNOA HD' },
+                { id: 'esri', label: '🌍 Esri Alt' },
+              ] as const
+            ).map((src) => (
+              <button
+                key={src.id}
+                type="button"
+                data-testid={`satellite-source-${src.id}`}
+                onClick={() => {
+                  onChangeSatelliteSource(src.id);
+                  if (mapStyle !== 'satellite') onChangeMapStyle('satellite');
+                }}
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                  satelliteSource === src.id
+                    ? 'bg-sky-400 text-slate-950 shadow'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                {src.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Bottom Center Action Bar: Exact Area Selection */}
-        <div className="pointer-events-auto mb-2 flex flex-wrap items-center justify-center gap-3 self-center rounded-2xl border border-emerald-500/50 bg-slate-950/90 px-4 py-3 shadow-2xl backdrop-blur-xl">
-          <button
-            type="button"
-            data-testid="toggle-drag-select-button"
-            onClick={() => setIsDragSelectMode((prev) => !prev)}
-            className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-extrabold shadow-lg transition ${
-              isDragSelectMode
-                ? 'border border-amber-400 bg-amber-500 text-slate-950'
-                : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-emerald-950/60'
-            }`}
-          >
-            <span>{isDragSelectMode ? '✕' : '✂️'}</span>
-            <span>
-              {isDragSelectMode
-                ? 'Cancel Drag Selection'
-                : 'Select Area on Map (Drag Box)'}
-            </span>
-          </button>
-
+        {/* Bottom Center Action Bar: Primary Capture or Optional Custom Crop */}
+        <div className="pointer-events-auto mb-2 flex flex-wrap items-center justify-center gap-3 self-center rounded-2xl border border-slate-800/90 bg-slate-950/90 px-4 py-3 shadow-2xl backdrop-blur-xl">
           <button
             type="button"
             data-testid="capture-map-area-button"
             onClick={() => triggerScreenshotCapture(null)}
-            className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs font-bold text-slate-200 transition hover:border-emerald-400 hover:text-white"
+            className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-slate-950 shadow-lg transition hover:bg-emerald-400"
           >
             <span>📸</span>
-            <span>Capture Framed Box</span>
+            <span>Capture Framed Area</span>
+          </button>
+
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            or
+          </span>
+
+          <button
+            type="button"
+            data-testid="toggle-drag-select-button"
+            onClick={() => setIsDragSelectMode((prev) => !prev)}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
+              isDragSelectMode
+                ? 'border border-amber-400 bg-amber-500 text-slate-950'
+                : 'border border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500 hover:text-white'
+            }`}
+          >
+            <span>{isDragSelectMode ? '✕' : '✂️'}</span>
+            <span>
+              {isDragSelectMode ? 'Cancel Selection' : 'Draw Custom Area'}
+            </span>
           </button>
         </div>
       </div>

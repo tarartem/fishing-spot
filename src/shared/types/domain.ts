@@ -81,24 +81,82 @@ export interface TacticalAdvice {
 
 export type SpotCategory = 'primary_hot' | 'structure_ledge' | 'shore_cove';
 
-export type MapStyleMode = 'satellite' | 'terrain' | 'plain';
+export type MapStyleMode = 'satellite' | 'terrain';
 
-export type ArtifactSpotColor = 'red' | 'blue' | 'orange';
+export type SatelliteSource = 'pnoa' | 'esri';
+
+export type SpotAccessMode =
+  | 'car_asphalt'
+  | 'dirt_track'
+  | 'hike_in'
+  | 'boat_only';
+
+export type ArtifactSpotColor = 'green' | 'blue' | 'yellow' | 'red' | 'orange';
+
+export interface SpeciesPresenceInfo {
+  name: string;
+  habitat_zone: string;
+  recommended_approach: string;
+  regulation_note?: string;
+}
+
+export type AnglerFeatureKey =
+  | 'point'
+  | 'flat'
+  | 'drop_off'
+  | 'channel'
+  | 'shadow'
+  | 'cover'
+  | 'depth_change'
+  | 'weed_line'
+  | 'weed_edge'
+  | 'current_break'
+  | 'bottom_transition'
+  | 'multiple_points';
+
+export type FeatureObservationType =
+  | 'directly_visible'
+  | 'topographic_inference';
+
+export type SpotRatingTier =
+  | 'Prime Convergence'
+  | 'Strong Structure'
+  | 'Solid Candidate'
+  | 'Moderate / Inferred Candidate'
+  | 'Single-Feature / Limited';
+
+export interface ExtractedSpotFeature {
+  feature: AnglerFeatureKey;
+  observation_type: FeatureObservationType;
+  visual_cue: string;
+  is_seasonal_or_dynamic?: boolean;
+}
 
 export interface GridArtifactSpot {
   rank: number; // 1..6
-  color: ArtifactSpotColor; // red (1-2), blue (3-4), orange (5-6)
+  color: ArtifactSpotColor; // green (1-2), blue (3-4), yellow (5-6)
   cell_id: string; // Primary cell e.g. "F6"
   grid_cells_label: string; // e.g. "Grid E6 / F6"
   badge?: string; // e.g. "🏆 (The #1 Trophy Point)"
   title: string; // e.g. "Tip of the Dehesa de Cortes Peninsula"
   x_percent: number; // 0..100 horizontal position on screenshot
   y_percent: number; // 0..100 vertical position on screenshot
+  target_species: string[];
+  access_mode: SpotAccessMode;
+  access_summary: string;
+  depth_structure: string;
   why_label: string; // e.g. "Why it's #1:"
   why_this_spot: string;
   secondary_label?: string; // e.g. "The Terrain:" or "Why fish love it:"
   secondary_text?: string;
   how_to_fish?: string;
+  stacked_x_count?: number; // 1..5 ("Multiple X's" factor overlap)
+  influencing_features?: string[]; // e.g. ["Underwater Point", "Drop-off / Shelf", "Submerged Weed Line", "Deep Water Safety"]
+  why_rank_summary?: string[]; // 2-4 concise bullet points explaining why this spot achieved its rank
+  extracted_features?: ExtractedSpotFeature[];
+  rating?: number; // Deterministic 1.0..10.0 score computed from extracted_features
+  rating_tier?: SpotRatingTier;
+  rating_justification?: string; // Short 1-2 sentence report summary tying extracted features to rating
 }
 
 export type ScaleAnalysisMode = 'micro' | 'meso' | 'macro';
@@ -122,10 +180,33 @@ export interface ArtifactRestrictionCheck {
   disclaimer: string;
 }
 
+export interface ClientWaterMaskSummary {
+  waterCoveragePct: number;
+  waterCells: string[];
+  sampledWaterPoints: Array<{
+    x_percent: number;
+    y_percent: number;
+    cell_id: string;
+  }>;
+  /** 64x64 raster water mask serialized as 4096 chars ('1' = water, '0' = land) */
+  grid64Mask?: string;
+}
+
 export interface WaterBodyArtifactAnalysis {
+  report_id?: string;
+  app_version?: string;
+  generated_at?: string;
+  has_fishable_water: boolean;
+  water_coverage_pct?: number;
+  no_water_reason?: string;
+  analysis_source?: 'gemini_vision' | 'geospatial_fallback' | 'no_water_detected';
   water_body_name: string;
   region_label: string;
   water_body_summary: string;
+  imagery_freshness_note?: string;
+  extraction_limitations?: string[];
+  screenshot_feature_inventory?: AnglerFeatureKey[];
+  species_present: SpeciesPresenceInfo[];
   geographical_context?: ArtifactGeographicalContext;
   restriction_check?: ArtifactRestrictionCheck;
   recommended_spots: GridArtifactSpot[];
@@ -134,9 +215,11 @@ export interface WaterBodyArtifactAnalysis {
 
 export interface UserScreenshotArtifact {
   id: string;
+  report_id?: string;
   createdAt: string;
   bbox: BoundingBox;
   mapStyle: MapStyleMode;
+  satelliteSource?: SatelliteSource;
   anglerGearNote?: string;
   rawScreenshotDataUrl: string;
   annotatedScreenshotDataUrl: string;

@@ -1,35 +1,111 @@
-# F02 — AI Water Body Recognition, Geographical/Terrain Analysis & Annotated Screenshot Artifact
+# F02 — AI Water Body Recognition, Water-Only Containment, Terrain/Road Access & Optimized Report
 
-> **Status**: `Approved`  
+> **Status**: `Implemented`  
 > **Module**: `src/modules/ai-advisor/`  
 > **Prompt Spec**: [`prompts/spot-finder-grid.prompt.md`](../../prompts/spot-finder-grid.prompt.md)  
+> **Schema**: [`prompts/schemas/spot-recommendation.schema.json`](../../prompts/schemas/spot-recommendation.schema.json)  
 > **Geographic Focus (MVP)**: Spain (`ES`)  
-> **Last Updated**: 2026-11-10
+> **Last Updated**: 2026-11-11
 
 ---
 
 ## 1. User Story
-**As a** user who has captured a screenshot of a Spanish water body on the map,  
-**I want to** initiate an AI analysis that recognizes the name of the water body, evaluates the screenshot image at the selected scale, checks geographical features (altitude, bank steepness, road and shore accessibility), verifies Spanish fishing restrictions (from our DB and live internet sources), and returns my screenshot annotated with an `A1–H8` grid, numbered points (`1–6`), and a complete tactical & regulatory summary,  
-**So that** I know exactly where to fish, how to access the shore safely, and whether fishing is permitted.
+**As a** user who has captured a gridded satellite screenshot of a Spanish water body,  
+**I want** the AI assistant to recognize the water body and the fish species living in it, place spots **strictly on water/shoreline points (never inland)**, evaluate real terrain steepness and road surfaces (asphalt vs. dirt track vs. hike-in), verify Spanish fishing restrictions, and present a clean, scannable report,  
+**So that** every spot on my annotated screenshot is genuinely fishable and I know before driving there what species to target and whether my car can reach the bank.
+
+---
 
 ## 2. AI & Geospatial Analysis Pipeline
-1. **Water Body Name & Internet Context Recognition (Spain Focus)**:
-   - Queries our curated Spanish water bodies DB (`db/seed/poland-spain-waters.ts`), **Spanish & English Wikipedia GeoSearch + Extracts (`es.wikipedia.org`, `en.wikipedia.org`)**, and **OpenStreetMap Nominatim (`zoom=12–14`)** within the selected `bbox` to identify the official water body name (e.g., *Embalse de Cortes-La Muela*, *Embalse de Tous*, *Río Júcar*, *L'Albufera de Valencia*) and Autonomous Community (*Comunidad Valenciana*, *Aragón*, *Cataluña*, *Extremadura*, *Andalucía*, etc.).
-2. **Geographical Features: Altitude, Bank Slope & Road/Shore Accessibility**:
-   - Queries the **Open-Meteo 90m DEM Elevation API** across a 9-point matrix (center water surface + North/South/East/West banks) to compute:
-     - **Water Altitude (`m` above sea level)**.
-     - **Shoreline Steepness / Relief (`Δm`)**: Classifies each sector as `Flat / Gentle Walkable Shore (<15m rise)`, `Moderate Bank Slope (15–50m rise)`, or `Steep Canyon Cliff (>50m rise — boat or hike-in only)`.
-   - Queries **OSM Nominatim (`zoom=16–17`)** along the shoreline perimeter to identify actual road and track access (e.g., `CV-428`, `CV-580`, paved roads vs. 4x4 dirt tracks).
-3. **Scale-Adaptive Multimodal Image Analysis on the `A1–H8` Grid**:
-   - **Tactical / Micro Scale (`< 2.5 km`)**: Analyzes fine terrain features (underwater shelf color changes from tan/green to navy blue, limestone points, bush overhangs, gravel beaches).
-   - **Sector / Macro Scale (`> 2.5 km`)**: Judges based on macro features visible at the larger scale (major river bends, tributary bays, island saddles, canyon narrows, highway bridges, and main basin points).
-4. **Fishing Restrictions & Regulatory Lookup**:
-   - Combines our curated DB + live Wikipedia/OSM detection of **Protected Nature Reserves** (*Parque Natural*, *Reserva Natural*, *Refugio de Pesca*, *Natura 2000*), **Dam/Power Infrastructure Buffers** (*Presa*, *Central Hidroeléctrica*, *Central Nuclear*), and **Spanish Autonomous Community Fishing Laws** (*Licencia de Pesca*, *Coto de Pesca*, *Real Decreto 630/2013* invasive species rules).
-5. **Annotated Screenshot & Summary Output**:
-   - Draws the `A1–H8` grid and the 6 numbered colored circles (`🔴 1, 2`, `🔵 3, 4`, `🟠 5, 6`) onto the `1024×1024` screenshot image.
-   - Outputs:
-     - `⛰️ Geography, Altitude & Shore Access`
-     - `⚖️ Fishing Regulations & Restrictions Check`
-     - `🎯 Where to Fish on the Grid:` (Spots 1–6)
-     - `🚗 Best Game Plan for This Area:`
+
+1. **Water Body Identification & Live Fish Species Lookup (English-Only UI)**:
+   - Combines our curated Spanish water bodies DB (`db/seed/poland-spain-waters.ts`), **Spanish & English Wikipedia GeoSearch + Extracts**, **OpenStreetMap Nominatim** (`accept-language=en`), and live **$0 biological occurrence APIs** (**iNaturalist API v1** `/observations/species_counts` for *Actinopterygii* within a padded watershed box, plus **OBIS API v3** `/checklist` for coastal/marine water bodies) within/around `bbox`.
+   - Live biological sightings are cross-filtered against an Iberian/European angling & native-species taxonomy map (excluding micro-pests or aquarium-release noise like *Gambusia*), cached in-memory with a short timeout fallback so offline or sparse areas seamlessly degrade to curated DB + regional defaults.
+   - The entire application UI, summaries, fish species names, spot descriptions, region labels (`Spain`, never `España`), and game plans are written **strictly in English**. Spanish terms appear **only** inside the **Fishing Regulations & Allowed-Check** module (`restriction_check`) where local Spanish permits, *Coto* systems, and protected-area rules are verified.
+   - Curated DB proximity matching must NOT mislabel dry nearby hills (within ±2.5 km) as a reservoir unless verified water exists inside the selected `bbox`.
+   - Produces a structured **`species_present`** roster (`name`, `habitat_zone`, `recommended_approach`, `regulation_note`) in English when `has_fishable_water === true` so the user immediately knows **what fish live in this water body** (e.g., *Black Bass*, *Zander*, *Common Carp*, *Iberian Barbel*, *Wels Catfish*, *Northern Pike*).
+
+2. **Dual-Layer Water Masking & Zero-Hallucination "No Water" Gate (Zero Inland Pins)**:
+   - **OSM Overpass + Multipolygon Ring Stitching + Non-Fishable Filtering**: Queries OpenStreetMap Overpass API (with mirror fallback) for permanent fishable water bodies (`natural=water`, `waterway=riverbank|river|canal`, `landuse=reservoir`), excluding `intermittent=yes`, `seasonal=yes`, `dry=yes`, `tunnel=yes|culvert`, `covered=yes`, `leisure=swimming_pool`, artificial concrete tanks/wastewater (`water=basin|wastewater|reflecting_pool|fountain|fishpond`), and tiny unnamed isolated polygons `< 3,500 m²` (Spanish agricultural *balsas de riego*). Stitches unclosed `relation` `outer` way segments end-to-end into closed polygons instead of closing partial arcs individually, and tracks `'ok' | 'empty' | 'unavailable'` explicitly.
+   - **Client Raster Water Mask (`64×64` OSM Map-Tile Water Mask with Connected-Component Filtering)**: During screenshot capture, fetches CORS-enabled OSM base tiles (`#aad3df` water palette with `3×3` neighborhood filtering) onto an offscreen canvas and runs **8-connected component filtering** so only genuine fishable water bodies survive (large lakes/reservoirs `area >= 45` px in `128×128` OR continuous rivers `span >= 24 && area >= 22`), automatically discarding backyard pools, farm tanks, and intermittent creek dashes. Cells `A1..H8` require interior water density (`>= 4` water blocks or `interiorScore >= 11`) before becoming fallback spot anchors.
+   - **Zero-Hallucination "No Water Body" Rejection (`has_fishable_water: false`)**:
+     - If verified permanent fishable water geometry is absent/empty (`< 0.8%` surviving clustered/component-filtered raster water **and** no valid OSM water feature, or if Gemini Vision sets `has_fishable_water: false` / `recommended_spots: []`), the pipeline **MUST NOT** trigger fallback spot placement, render pins `1–6`, or export a spot PDF. Instead, it returns `has_fishable_water: false`, `recommended_spots: []`, and a clear plain-English `no_water_reason` asking the user to pan/zoom onto water.
+   - **Deterministic Post-LLM Water Gate, Interior Auto-Snap, Grid-Line Clearance & De-Stacking**:
+     - Recomputes `cell_id` deterministically from `(x_percent, y_percent)` (`percentToCellId`) so pin numbers never disagree with their grid label.
+     - Validates every spot strictly **inside** active water polygons (`booleanPointInPolygon`) and/or interior raster water pixels (`grid64Mask` with cardinal-neighbor preference) rather than stopping on `0m` outer dry shoreline edges where rendered pins visually spill onto land. When `waterPolygons` are present, strictly requires vector-verified points (no bypass back to unverified raster points) and outputs `2–6` verified water spots honestly on narrow/edge captures rather than padding dry land. Only when `waterPolygons` are empty (e.g., Overpass timeout) may the pipeline fall back to strict OSM Carto `#aad3df` raster water masking while disclosing this in `extraction_limitations`. Never falls back to `cellIdToPercentCenter()` on corner-grazing cells.
+     - Enforces **grid-line & label clearance**: keeps pin centers away from `12.5%` cell boundaries (`>= 1.8%` interior margin inside the assigned cell whenever interior water exists in that cell) so rendered `16px`-radius circles on the `1024×1024` grid do not visually straddle into adjacent cells (e.g., `E6`/`F6`) or overlap cell labels.
+     - Any anti-overlap nudge **must re-verify** that the nudged pin remains strictly inside water and does not stack onto an occupied coordinate when multiple water cells exist.
+     - Fallback mode (if Gemini returns `503`/timeout **when water IS verified**) classifies water coordinates using scale-aware Turf.js polygon/shoreline geometry and metric-scaled 64×64 raster angular/radial probes (peninsula/point tip, sheltered cove/bay, steep shoreline bank, straight bank margin, channel narrowing, or open-basin water) rather than hardcoded spot templates or invented numeric meter depths. It uses greedy farthest-point spacing (`>= 18%` frame separation where geometry allows), prioritizes shore-castable coordinates (`<= 75m` from nearest bank) first, caps `> 75m` open-basin spots at max `1–2`, reserves `channel` for true narrowings/corridors (using `depth_change`/`flat` for wide open water), and marks `analysis_source: 'geospatial_fallback'` clearly in UI/PDF. If neither Gemini nor any verified water mask confirms water, returns an honest unavailability/no-water response instead of fabricating pins.
+     - Single crisp shore/offshore boundary: spots `<= 75m` from nearest shore are shore/long-cast candidates (`car_asphalt` / `dirt_track` / `hike_in`), whereas spots `> 75m` offshore are tagged `boat_only` (requiring permitted watercraft/float-tube; never `hike_in`), with human-facing text stating exact distance & cardinal bank direction (e.g., *"~35m off the east bank"*).
+     - Regional freshwater species baselines incorporate northern/montane Autonomous Communities (Galicia, Asturias, Cantabria, País Vasco, Navarra, La Rioja, Castilla y León) and reservoir altitude (`>= 450m` ASL) so trout/barbel waters include **Brown Trout**, **Iberian Barbel**, **Iberian Chub**, **Common Carp**, and **Black Bass** without over-defaulting lowland Zander.
+
+3. **Detailed Terrain Steepness & Road-Surface Accessibility**:
+   - **Road & Track Network (OSM Overpass `way["highway"]`)**: Fetches roads/tracks inside `bbox` (+500m margin), extracting `highway` type, `surface` (`asphalt`, `paved`, `concrete`, `unpaved`, `dirt`, `gravel`, `ground`), `tracktype` (`grade1`–`grade5`), and `access` (`private`/`agricultural`).
+   - **Elevation & Slope Profile**: Samples elevation across the bbox sectors and verified water/spot coordinates (using **Open-Meteo 90m Copernicus DEM**, labeled `DEM est.`) to compute water surface altitude (`m ASL`, preferring verified water-cell samples), surrounding relief (`Δm`), and **per-spot local sector bank slope** (never applying global bbox `relief_range_m` identically across every spot).
+   - **Per-Spot Access Classification & Watercraft Caveat**: Using Turf.js (`@turf/nearest-point-on-line` / `@turf/point-to-line-distance`) + Nominatim perimeter road fallback when Overpass segments are sparse, computes distance from each spot to the nearest drivable road/track and attaches:
+     - `access_mode`: `'car_asphalt' | 'dirt_track' | 'hike_in' | 'boat_only'`
+     - `access_summary`: Practical instruction citing **only roads spatially near that spot** (never repeating a single global Nominatim street across opposite shores of a multi-kilometer reservoir), e.g., *"Asphalt road CV-428 · ~60m flat walk to bank"*, *"Dirt track (grade2) · ~120m walk to water"*, *"No mapped road in immediate sector — verify local bank tracks"*, or *"Steep bank (+45m relief, no mapped road) — check shore trails or verify local watercraft/floatation rules before launching"*.
+
+4. **Optimal Scale, Resolution Gating, Non-Hardcoded Tactics & 12-Feature Extraction Engine**:
+   - **Exact Ground Resolution & Sharp Tile Stitching**: Computes `metersPerPixel = (maxSpanKm * 1000) / 1024` in `scale-utils.ts` and uses `Math.ceil` tile zoom selection (`z12–z18` for PNOA HD, `z12–z17` for Esri) in `screenshot-compositor.ts` so `1024×1024` imagery is never downsampled unnecessarily.
+   - **3-Tier Scale Honesty & Feature Gating**:
+     - **Optimal Micro Scale (`0.30 – 1.50 km`, `~0.3–1.5 m/px`)**: Full **12-feature canonical extraction** enabled: `point`, `flat`, `drop_off`, `channel`, `shadow`, `cover`, `depth_change`, `weed_line`, `weed_edge`, `current_break`, `bottom_transition`, `multiple_points`.
+     - **Sector / Meso Scale (`1.50 – 5.0 km`, `~1.5–5.0 m/px`)**: Macro structures and broad shelf/weed belts allowed; fine shoreline cover and small shadows flagged as limited by zoom.
+     - **Wide Macro Scale (`> 5.0 km`, `> 5.0 m/px`)**: Hard-gates micro-features (`weed_line`, `weed_edge`, `shadow`, `cover`, `bottom_transition`) **off** in both prompt and post-processing; permits only macro features (`point`, `flat`, `drop_off`, `channel`, `depth_change`, `current_break`, `multiple_points`) and discloses the scale limitation honestly.
+   - **Zero-Hallucination & Honest Observation Typing**:
+     - Never forces a minimum feature count (e.g., if a simple canal or flat bank only shows 1–2 features, reports 1–2 honestly).
+     - Never invents exact numeric underwater depths (e.g., `3–11m`, `5–12m`) when no bathymetry data exists; fallback descriptions state qualitative structure with depth explicitly marked unmeasured.
+     - Every extracted feature carries `observation_type`: `'directly_visible'` (clearly visible in RGB pixels) vs. `'topographic_inference'` (inferred from canyon/bend geometry when turbidity or glare obscures the bottom), plus a concrete `visual_cue`.
+     - In `geospatial_fallback` (when Gemini is unavailable), never fabricates unseen flora, shadows, underwater weed edges, or hardcoded brand tackle; derives per-spot `target_species` and structure-matched tactics dynamically (using optional `anglerGearNote` only if explicitly provided by the user) and builds `best_game_plan` by picking the lowest-slope shoreline entry first, skipping trivial `< 120m` hops between identical-tier spots, never routing `"Walk ... along bank paths"` to/from `boat_only` or offshore spots or across open water, and mentioning floatation/watercraft rules only when watercraft spots are present.
+   - **Static Satellite Imagery vs. Dynamic Flora Honesty**:
+     - Seasonal/time-dependent features (`weed_line`, `weed_edge`, `shadow`, and shoreline brush `cover`) are flagged `is_seasonal_or_dynamic: true` and paired with an `imagery_freshness_note` reminding anglers that satellite orthophotos are historical snapshots while permanent contours (points, channels, drop-offs) remain reliable.
+   - **Deterministic `1–10` Feature-Based Rating & Justification Summary**:
+     - `src/modules/ai-advisor/spot-rating.ts` computes each spot's `rating` (`1.0 – 10.0`), `rating_tier` (`Prime Convergence` / `Strong Structure` / `Solid Candidate` / `Moderate / Inferred Candidate` / `Single-Feature / Limited`), and concise `rating_justification` (1–2 sentence summary for UI and 1-page PDF) deterministically from the deduplicated `extracted_features`, weighting multi-category convergence (Structure + Transition + Ambush/Current) and capping single/dual-feature spots (`<= 4.5` for 1 feature, `<= 6.8` for 2 features). `'Single-Feature / Limited'` is reserved strictly for `0–1` feature spots; spots with `>= 2` features scoring `< 4.8` are labeled `'Moderate / Inferred Candidate'`.
+     - Spots are sorted descending by computed `rating` so `Spot #1` is always the highest-rated candidate.
+   - Optional lightweight Canvas 2D preprocessing/diagnostics on the captured satellite image detects extreme specular water glare inside water cells so the user can switch imagery sources without heavy WASM dependencies.
+
+5. **Fishing Restrictions & Regulatory Lookup**:
+   - Retains multi-source Spain checks (curated DB + Wikipedia/OSM protected reserves + dam/power-plant 100m exclusion buffers + Autonomous Community license & *Real Decreto 630/2013* invasive species laws).
+
+6. **Professional Minimalist Report UI & 1-Page PDF Export ("Multiple X's" Stacking Rationale)**:
+   - **Map Landing & Selection Preview**:
+     - Concise reticle hint (`Frame your fishing area`) and clear CTA hierarchy (`Capture Framed Area` primary emerald CTA, `or` divider, `Draw Custom Area` secondary button).
+     - Streamlined Selection Preview modal: removes "Step 1" badge, "Retake Selection" header button, and optional lure/gear input field; provides a clear segmented imagery selector (`PNOA HD (Spain)` | `Esri World`) and concise scale summary.
+     - Global top header omits redundant `Change Location` button (kept cleanly inside the report modal).
+   - **Preparation State (Single-Feature Sequential Stepper)**: While analysis runs, a dedicated dialog demonstrates **1 concise capability at a time** across all 6 checkpoints (water boundary scan, bottom structure, angler ecology, shore & road access, regulations check, tactical synthesis) sequentially and independently of backend speed so every capability is clearly visible.
+   - **Water Body & Fish Species Card**: Name, region, altitude/scale, and structured **Fish Species Present** in English.
+   - **Scannable Minimalist Spot Cards (`1–6`) with Stacking Rationale**:
+     - Clean semantic rank indicator: **Green** (`#22c55e`) for Spots 1–2 (Prime/Trophy), **Blue** (`#0ea5e9`) for Spots 3–4 (Sheltered/Accessible), and **Yellow** (`#eab308`) for Spots 5–6 (Secondary/Bottlenecks).
+     - Grid cell coordinate in monospace (e.g. `[C4]`), Title, and subtle access badge.
+     - Structured key-values (`Target Species`, `Depth / Structure`) and subtle neutral `influencing_features` tags.
+     - Compact tactical approach & technique notes without visual clutter or nested boxes.
+   - **Practical Access & Game Plan (`best_game_plan`)**: Ordered parking/road → walking → fishing route.
+   - **Spain Regulations Card**: Concise status/permit/exclusion summary verifying whether fishing is allowed (the only place where Spanish legal/permit terms appear).
+   - **Header & Navigation Controls**:
+     - Concise `← Change Location` button.
+     - Top-right action group for exports: `[ 📄 PDF Report ]` and `[ 🖼️ Map PNG ]`.
+     - Complete removal of obsolete internal telemetry chips.
+
+---
+
+## 3. Testable Acceptance Criteria (Given / When / Then)
+- **AC-F02-1 (Zero Inland Spots)**: Given any water polygon covering only part of `bbox` (e.g., water only in columns `A–D` while `E–H` are dry land with dirt roads), When `analyzeWaterBodyScreenshot` normalizes or falls back on spots, Then 100% of `recommended_spots` have `(x_percent, y_percent)` inside water/shoreline (`<= 15m` from water) and `cell_id` strictly matching `percentToCellId(x_percent, y_percent)`.
+- **AC-F02-2 (Road Surface & Access Mode)**: Given OSM highway segments near `bbox` with `surface=asphalt` vs `highway=track, tracktype=grade3`, When geospatial context & spot access are computed, Then each spot includes a practical `access_mode` (`car_asphalt` / `dirt_track` / `hike_in` / `boat_only`) and `access_summary` citing the road/track type and distance.
+- **AC-F02-3 (English-Only Fish Species Roster)**: Given any recognized water body, When `analyzeWaterBodyScreenshot` returns, Then `species_present` contains at least 2 structured English fish species entries (`name`, `habitat_zone`, `recommended_approach`) and no non-English UI labels outside `restriction_check`.
+- **AC-F02-4 (Schema & Gemini Vision Structured Output)**: Given `GEMINI_API_KEY` is configured, When calling Gemini Vision (`gemini-2.5-flash` / configurable `GEMINI_VISION_MODEL`), Then the request passes `systemInstruction`, `allowed_water_cells`, and a strict `responseSchema` aligned with `prompts/schemas/spot-recommendation.schema.json`, and any model/API failure is logged before degrading to `geospatial_fallback`.
+- **AC-F02-5 (1-Page PDF Report Download & Source Transparency)**: Given a completed artifact, When the user clicks **"Download 1-Page PDF Report"**, Then a single-page PDF document (`1` page total) containing the annotated screenshot, `analysis_source` badge (`AI Vision` vs. `Geospatial Fallback`), `DEM est.` elevation label, and complete report description is generated and downloaded.
+- **AC-F02-6 (No-Water-Body Zero-Hallucination Rejection)**: Given a screenshot/bbox containing only dry land (e.g., mountain hills and forest roads with `< 1%` clustered water and no OSM water feature) OR when Gemini Vision reports `has_fishable_water: false`, When `analyzeWaterBodyScreenshot` runs, Then it returns `has_fishable_water: false`, `recommended_spots: []`, never triggers fallback spots, and the UI renders no map pins or PDF download button.
+- **AC-F02-7 (OSM Multipolygon Stitching & Raster Water Mask Fallback)**: Given a large reservoir represented as multiple unclosed `outer` segments in an OSM `relation`, When `fetchOsmWaterAndRoads` parses the relation or when `clientWaterMask` (`grid64Mask`) is provided while Overpass is unavailable, Then outer rings are stitched into valid polygons, vector-present paths never bypass back to unverified raw raster points, and raster-only fallback enforces strict `#aad3df` water containment and zero stacked coordinates.
+- **AC-F02-8 (English-Only Region Labels & Tightened Species Halo)**: Given OSM Nominatim reverse geocoding and iNaturalist lookup in Spain, When `buildEnrichedGeospatialContext` builds `regionLabel` and `speciesPresentDefaults`, Then country names resolve in English (`Spain`, never `España`), watershed species halo stays tight (`0.05°` ~5 km), and Brown Trout (*Salmo trutta*) is distinguished from invasive Rainbow Trout (*Oncorhynchus mykiss*).
+- **AC-F02-9 (12-Feature Extraction, Deterministic 1–10 Rating & Justification Summary)**: Given any fishable water body analysis, When recommended spots are returned, Then each spot includes validated canonical `extracted_features` (from the 12 angler features with `observation_type` and `visual_cue`), a deterministic `rating` (`1.0–10.0`) where single-feature spots are capped (`<= 4.5`) and `'Single-Feature / Limited'` applies only when `features.length <= 1`, descending `rank` order matching `rating`, a concise `rating_justification` summary rendered in both UI and PDF, per-spot access/species/tactics differentiation (no hardcoded brand lures), and an `imagery_freshness_note` warning that flora/shadows change over time.
+- **AC-F02-10 (Scale-Gated Zero-Hallucination on Macro Captures)**: Given a wide macro bounding box (`> 5.0 km`), When `analyzeWaterBodyScreenshot` processes or normalizes spots, Then micro-features (`weed_line`, `weed_edge`, `shadow`, `cover`, `bottom_transition`) are gated out and `extraction_limitations` honestly states the resolution limit.
+- **AC-F02-11 (Grid-Line Clearance & Accurate PDF Legend / Wrapping)**: Given spots snapped onto water inside `A1..H8` and exported to the 1-page PDF report, When `constrainSpotsToWaterMask` and `buildOnePageFishingPdfDoc` run, Then pins keep clear of cell boundary lines (`>= 1.8%` interior margin where cell water allows), `pdf-report.ts` renders a wrapped legend inside `leftW` matching the actual map pin colors (`1-2 GREEN`, `3-4 BLUE`, `5-6 YELLOW`), preserves line breaks before `Permits:` / `Restricted:` in the regulations panel, and spot headers wrap cleanly without mid-word `.slice(...)` truncation.
+- **AC-F02-12 (Report Versioning, ID, Human-Friendly Timestamp, Non-Clipping PDF & Accurate Channel/Bank Naming)**: Given any generated fishing spot report and its 1-page PDF export, When the analysis and PDF are built, Then:
+  - Each report carries a unique short readable `report_id` (`FS-YYYYMMDD-XXXX`), the single-source-of-truth `app_version` from `package.json` (e.g., `v0.2.0`), and a human-friendly `generated_at` timestamp (`DD MMM YYYY, HH:mm`, 24h `en-GB`, e.g., `12 Nov 2026, 13:24`), all displayed in both the report UI and PDF header.
+  - The exported PDF filename embeds the `report_id` (`fishing-spot-<water-slug>-<report_id>.pdf`).
+  - `GEOGRAPHY, ROADS & SHORE ACCESS` and spot card tactics render cleanly without clipping `Slope:` or tactics lines on dense 6-spot reports.
+  - `Channel Bottleneck` uses a tightened opposing-wall probe (`~30m` when vector polygons exist) so wide bends/arms (`>= 60m`) are not misclassified as tight bottlenecks, and shoreline titles use sector-neutral phrasing (`Shoreline Peninsula Point`, `Sheltered Cove`, `Steep Bank Contour`) with relative bank cues instead of misleading `North-Bank` / `West-Bank` prefixes.
+- **AC-F02-13 (Flow-Aware Placement, Rating, Tactics & Game Plan)**: Given OSM `waterway=river|stream|canal` segments and DEM elevations for a `bbox`, When `analyzeWaterBodyScreenshot` runs, Then:
+  - Flow direction (`flowBearingDeg`, `flowCardinal`, `flowLabel`, `isFlowingWater`, `inflowPoints`) is computed using length-weighted OSM vectors and DEM cross-check (`|Δelev| >= 2m` threshold), while stillwater basins away from scaled inflow plumes (`200m–600m`) remain `stillwater`.
+  - On flowing water or inside verified inflow zones, points/channels confirm `current_break` (with downstream-eddy/inflow tie-breaker preference and directional cast/drift tactics citing upstream/downstream flow); on calm stillwater away from inflows, `current_break` is omitted rather than inflated, narrows are titled `Constriction Neck` / `Cove Mouth Pass` with stillwater tactics (never citing `"current edge"`), and `channel_narrowing` spots are capped at max `2` per report when other structures exist.
+  - On flowing rivers, `buildDynamicGamePlan` prefers downstream-to-upstream progression among **safe, shore-accessible** spots (terrain safety/slope overrides upstream routing).

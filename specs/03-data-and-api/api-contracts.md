@@ -63,3 +63,13 @@ On-demand Level 2 micro-analysis when a registered angler clicks a specific grid
 
 ### 1.5 `GET /api/water-bodies/:waterBodyId/reviews` & `POST /api/water-bodies/:waterBodyId/reviews` (Registered Users Only for Full/Write Access)
 Fetches all reviews/photos or attaches a new angler review, star rating, species caught, and compressed WebP photo to a water body pin / grid spot.
+
+---
+
+### 1.6 `POST /api/ai-advisor/analyze-screenshot`
+Analyzes a captured `1024×1024` gridded satellite screenshot (`bbox`, optional `griddedScreenshotBase64`, `anglerGearNote`, `hintWaterBodyId`, and optional `clientWaterMask` containing `waterCoveragePct`, `waterCells`, `sampledWaterPoints`, and `grid64Mask`).
+- **Response (`WaterBodyArtifactAnalysis`)**:
+  - `has_fishable_water: boolean` — `false` when no fishable water body exists in `bbox`/screenshot (`recommended_spots: []`, zero hallucination).
+  - `water_coverage_pct?: number` and `no_water_reason?: string`.
+  - `analysis_source?: 'gemini_vision' | 'geospatial_fallback' | 'no_water_detected'`.
+  - `water_body_name`, `region_label` (strictly English via `accept-language=en`), `water_body_summary`, `imagery_freshness_note`, `extraction_limitations`, `screenshot_feature_inventory`, `species_present`, `geographical_context`, `restriction_check`, `recommended_spots` (each with canonical `extracted_features`, deterministic `1–10` `rating`, `rating_tier`, and concise `rating_justification`), `best_game_plan` conforming to [`prompts/schemas/spot-recommendation.schema.json`](../../prompts/schemas/spot-recommendation.schema.json).

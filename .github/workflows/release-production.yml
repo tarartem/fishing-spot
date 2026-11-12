@@ -1,0 +1,56 @@
+name: Production Release & Deploy Verification
+
+on:
+  push:
+    branches: [production]
+  workflow_dispatch:
+
+jobs:
+  verify-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Test Suite
+        run: npm run test
+
+      - name: Run DB Migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        if: ${{ env.DATABASE_URL != '' }}
+        run: npm run db:migrate
+
+      - name: Trigger Render Deploy Hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        if: ${{ env.RENDER_DEPLOY_HOOK_URL != '' }}
+        run: |
+          echo "Triggering Render deployment..."
+          curl -f -X POST "$RENDER_DEPLOY_HOOK_URL"
+          echo "Render deploy triggered successfully."
+
+      - name: Verify Health Endpoint
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL || 'https://fishing-spot.onrender.com' }}
+        run: |
+          echo "Checking health endpoint at $PRODUCTION_URL/api/health..."
+          for i in {1..30}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PRODUCTION_URL/api/health" || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "Production service is healthy (HTTP 200)!"
+              exit 0
+            fi
+            echo "Waiting for service to be healthy... (attempt $i/30, got HTTP $STATUS)"
+            sleep 10
+          done
+          echo "Warning: Health endpoint did not return 200 within timeout."

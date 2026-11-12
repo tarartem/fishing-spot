@@ -2,9 +2,9 @@ name: CI — Spec, Typecheck, Test & Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, development]
   pull_request:
-    branches: [main]
+    branches: [main, development, production]
 
 jobs:
   verify:

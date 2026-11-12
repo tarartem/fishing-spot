@@ -1,41 +1,398 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type, type Schema } from '@google/genai';
+import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
+import turfDistance from '@turf/distance';
+import { lineString, point } from '@turf/helpers';
+import {
+  APP_VERSION,
+  formatReportTimestamp,
+  generateReportId,
+} from '@/shared/app-version';
+import {
+  computeCompassBearingDeg,
+  isDownstreamLeeOfShore,
+  isPointInFlowingWater,
+  type FlowContext,
+} from '@/modules/ai-advisor/flow-direction';
 import {
   buildEnrichedGeospatialContext,
+  resolveLocalSectorReliefM,
   type EnrichedGeospatialContext,
 } from '@/modules/ai-advisor/geospatial-context.service';
+import {
+  ALL_ANGLER_FEATURE_KEYS,
+  getAllowedFeaturesForScale,
+} from '@/modules/ai-advisor/scale-utils';
+import { isPercentOnRasterWater } from '@/modules/ai-advisor/osm-tile-water-mask';
+import {
+  IMAGERY_FRESHNESS_NOTE,
+  rankAndRateSpots,
+} from '@/modules/ai-advisor/spot-rating';
+import {
+  classifySpotRoadAccess,
+  computeShoreMetrics,
+  constrainSpotsToWaterMask,
+  percentToCellId,
+  percentToLngLat,
+  sampleDistinctWaterCoordinates,
+  type CardinalDirection,
+  type WaterGeometryFeature,
+} from '@/modules/ai-advisor/water-mask-and-access';
 import type {
+  AnglerFeatureKey,
   BoundingBox,
+  ClientWaterMaskSummary,
+  ExtractedSpotFeature,
   GridArtifactSpot,
+  SpeciesPresenceInfo,
+  SpotAccessMode,
   WaterBodyArtifactAnalysis,
 } from '@/shared/types/domain';
-
-const COL_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
 
 export interface AnalyzeWaterBodyScreenshotInput {
   bbox: BoundingBox;
   griddedScreenshotBase64?: string;
   anglerGearNote?: string;
   hintWaterBodyId?: string;
+  clientWaterMask?: ClientWaterMaskSummary | null;
 }
 
-function percentToCellId(xPercent: number, yPercent: number): string {
-  const colIdx = Math.max(0, Math.min(7, Math.floor((xPercent / 100) * 8)));
-  const rowNum = Math.max(1, Math.min(8, Math.floor((yPercent / 100) * 8) + 1));
-  return `${COL_LABELS[colIdx]}${rowNum}`;
+const SYSTEM_INSTRUCTION = `You are an expert Spanish angling guide, satellite imagery photo-interpreter, topographer, and Spanish fisheries regulation specialist.
+You analyze 1024x1024 satellite screenshots overlaid with an 8x8 Coordinate Grid:
+- Columns A..H left-to-right: A=0..12.5%, B=12.5..25%, C=25..37.5%, D=37.5..50%, E=50..62.5%, F=62.5..75%, G=75..87.5%, H=87.5..100%.
+- Rows 1..8 top-to-bottom: 1=0..12.5%, 2=12.5..25%, 3=25..37.5%, 4=37.5..50%, 5=50..62.5%, 6=62.5..75%, 7=75..87.5%, 8=87.5..100%.
+
+CRITICAL PLACEMENT & ZERO-HALLUCINATION RULES (NO WATER = NO SPOTS):
+0. WATER PRESENCE GATE: First inspect the screenshot. If NO fishable river, lake, reservoir, pond, or sea coastline is visibly present in the image (e.g., only mountains, pine forests, fields, dirt roads, or urban buildings), you MUST set has_fishable_water=false, water_coverage_pct=0, explain why in no_water_reason, and return recommended_spots=[], species_present=[], best_game_plan=[]. NEVER invent water structures or place pins on dry land.
+1. EVERY pin (x_percent, y_percent) MUST sit directly ON VISIBLE WATER (dark blue, turquoise, green-blue, or submerged shallow shelf within <=10m of water).
+2. NEVER place a pin on dry land, hillsides, trees, bushes, dirt roads, or paved roads. Even for road-accessible spots (Rank 3-4), place the pin IN THE WATER right off the accessible shoreline, and describe the parking/road approach in access_summary.
+3. ONLY place pins inside the provided ALLOWED_WATER_CELLS list. Never pick a cell from DRY_LAND_FORBIDDEN_CELLS.
+4. Match cell_id mathematically to (x_percent, y_percent) using the column/row percentage bands above, and spread spots across distinct water cells without stacking.
+5. When water IS present, output 2 to 6 distinct spots (6 when water spans wide areas; 2-5 if water covers only an edge or corner of the crop).
+6. Never place a pin on a dam wall (presa), spillway, or restricted exclusion zone.
+
+PRACTICAL REPORT, ENGLISH-ONLY & ACCESS RULES:
+7. Write ALL summaries, fish species names, spot titles, terrain/access notes, region names (Spain), and game plan strictly in English. Spanish terms are used ONLY inside the fishing regulation/allowed check, not in the UI report text.
+8. Provide a clear species_present roster of fish in this water body (English name, holding habitat/depth, and brief regulation note).
+9. For every spot, classify access_mode strictly from the verified OSM road/surface and elevation slope context: car_asphalt, dirt_track, hike_in, or boat_only.
+10. Keep spot descriptions crisp, practical, and scannable outdoors on a phone.
+
+SPOT EVALUATION, 12-FEATURE EXTRACTION & ZERO-OVERPROMISING RULES:
+11. Scan the water body for the 12 canonical angler features:
+    - point, flat, drop_off, channel, shadow, cover, depth_change, weed_line, weed_edge, current_break, bottom_transition, multiple_points.
+12. NEVER hallucinate or pad features! Report ONLY features genuinely visible in the screenshot or cleanly supported by shoreline/channel geometry. If a spot shows only 1 or 2 features, report 1 or 2 honestly.
+13. Respect scale & visibility limits: ONLY use feature keys listed in ALLOWED_FEATURES_FOR_SCALE. If water is turbid or glared, do not invent submerged weed edges or bottom transitions—note the visibility limit in extraction_limitations.
+14. For each feature in extracted_features, set observation_type to "directly_visible" (seen in pixels) or "topographic_inference" (inferred from geometry/slope) and cite a factual visual_cue.
+15. Satellite imagery is a historical snapshot; aquatic flora (weed_line, weed_edge) and shadows change seasonally. Frame flora cues as historical reference to verify on site.
+16. Write a concise 1-2 sentence rating_justification summarizing which features combine at that spot. Final 1-10 rating and rank order are computed deterministically on the server from extracted_features.`;
+
+const SCREENSHOT_RESPONSE_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  required: [
+    'has_fishable_water',
+    'water_body_name',
+    'region_label',
+    'water_body_summary',
+    'extraction_limitations',
+    'screenshot_feature_inventory',
+    'species_present',
+    'recommended_spots',
+    'best_game_plan',
+  ],
+  properties: {
+    has_fishable_water: { type: Type.BOOLEAN },
+    water_coverage_pct: { type: Type.NUMBER },
+    no_water_reason: { type: Type.STRING },
+    water_body_name: { type: Type.STRING },
+    region_label: { type: Type.STRING },
+    water_body_summary: { type: Type.STRING },
+    extraction_limitations: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+    },
+    screenshot_feature_inventory: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.STRING,
+        enum: [...ALL_ANGLER_FEATURE_KEYS],
+      },
+    },
+    species_present: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        required: ['name', 'habitat_zone', 'recommended_approach'],
+        properties: {
+          name: { type: Type.STRING },
+          habitat_zone: { type: Type.STRING },
+          recommended_approach: { type: Type.STRING },
+          regulation_note: { type: Type.STRING },
+        },
+      },
+    },
+    recommended_spots: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        required: [
+          'rank',
+          'color',
+          'cell_id',
+          'grid_cells_label',
+          'title',
+          'x_percent',
+          'y_percent',
+          'target_species',
+          'access_mode',
+          'access_summary',
+          'depth_structure',
+          'why_label',
+          'why_this_spot',
+          'how_to_fish',
+          'extracted_features',
+          'rating_justification',
+          'stacked_x_count',
+          'influencing_features',
+          'why_rank_summary',
+        ],
+        properties: {
+          rank: { type: Type.INTEGER },
+          color: { type: Type.STRING, enum: ['green', 'blue', 'yellow', 'red', 'orange'] },
+          cell_id: { type: Type.STRING },
+          grid_cells_label: { type: Type.STRING },
+          badge: { type: Type.STRING },
+          title: { type: Type.STRING },
+          x_percent: { type: Type.NUMBER },
+          y_percent: { type: Type.NUMBER },
+          target_species: { type: Type.ARRAY, items: { type: Type.STRING } },
+          access_mode: {
+            type: Type.STRING,
+            enum: ['car_asphalt', 'dirt_track', 'hike_in', 'boat_only'],
+          },
+          access_summary: { type: Type.STRING },
+          depth_structure: { type: Type.STRING },
+          why_label: { type: Type.STRING },
+          why_this_spot: { type: Type.STRING },
+          secondary_label: { type: Type.STRING },
+          secondary_text: { type: Type.STRING },
+          how_to_fish: { type: Type.STRING },
+          extracted_features: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              required: ['feature', 'observation_type', 'visual_cue'],
+              properties: {
+                feature: {
+                  type: Type.STRING,
+                  enum: [...ALL_ANGLER_FEATURE_KEYS],
+                },
+                observation_type: {
+                  type: Type.STRING,
+                  enum: ['directly_visible', 'topographic_inference'],
+                },
+                visual_cue: { type: Type.STRING },
+              },
+            },
+          },
+          rating_justification: { type: Type.STRING },
+          stacked_x_count: { type: Type.INTEGER },
+          influencing_features: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+          },
+          why_rank_summary: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+          },
+        },
+      },
+    },
+    best_game_plan: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+    },
+  },
+};
+
+function enrichSpotWithRoadAccess(
+  spot: GridArtifactSpot,
+  bbox: BoundingBox,
+  geo: EnrichedGeospatialContext
+): GridArtifactSpot {
+  const [spotLng, spotLat] = percentToLngLat(spot.x_percent, spot.y_percent, bbox);
+  const localReliefM = resolveLocalSectorReliefM(
+    geo.demSectorSamples,
+    spot.x_percent,
+    spot.y_percent,
+    geo.geographicalContext.relief_range_m
+  );
+  if (geo.roads.length > 0 || !spot.access_summary) {
+    const roadCheck = classifySpotRoadAccess({
+      spotLng,
+      spotLat,
+      roads: geo.roads,
+      sectorReliefM: localReliefM,
+      fallbackRoadNames: geo.detectedRoads,
+    });
+    return {
+      ...spot,
+      access_mode: roadCheck.access_mode,
+      access_summary: roadCheck.access_summary,
+    };
+  }
+  return spot;
+}
+
+function normalizeAccessMode(raw: unknown): SpotAccessMode {
+  if (
+    raw === 'car_asphalt' ||
+    raw === 'dirt_track' ||
+    raw === 'hike_in' ||
+    raw === 'boat_only'
+  ) {
+    return raw;
+  }
+  return 'hike_in';
+}
+
+function normalizeSpeciesList(
+  raw: unknown,
+  fallback: SpeciesPresenceInfo[]
+): SpeciesPresenceInfo[] {
+  if (!Array.isArray(raw) || raw.length < 2) return fallback;
+  const cleaned = raw
+    .filter((item): item is SpeciesPresenceInfo =>
+      Boolean(
+        item &&
+          typeof item === 'object' &&
+          'name' in item &&
+          typeof item.name === 'string' &&
+          item.name.trim().length > 0
+      )
+    )
+    .slice(0, 6)
+    .map((item) => ({
+      name: item.name.trim(),
+      habitat_zone: item.habitat_zone || 'Shoreline shelves & main channel edges',
+      recommended_approach:
+        item.recommended_approach || 'Spinning lures and soft plastics',
+      regulation_note: item.regulation_note,
+    }));
+  return cleaned.length >= 2 ? cleaned : fallback;
+}
+
+function buildNoWaterDetectedResponse(
+  geo: EnrichedGeospatialContext,
+  customReason?: string
+): WaterBodyArtifactAnalysis {
+  const coveragePct = geo.rasterWaterMask?.waterCoveragePct ?? 0;
+  const reason =
+    customReason?.trim() ||
+    `No fishable river, lake, reservoir, or coastline was detected inside this captured view (${coveragePct.toFixed(1)}% clustered water across ${geo.regionLabel}). Pan or zoom directly onto visible water and try again.`;
+
+  return {
+    report_id: generateReportId(),
+    app_version: APP_VERSION,
+    generated_at: formatReportTimestamp(),
+    has_fishable_water: false,
+    water_coverage_pct: coveragePct,
+    no_water_reason: reason,
+    analysis_source: 'no_water_detected',
+    water_body_name: 'No Water Body Detected',
+    region_label: geo.regionLabel.replace(/\bEspaña\b/g, 'Spain'),
+    water_body_summary: reason,
+    imagery_freshness_note: IMAGERY_FRESHNESS_NOTE,
+    extraction_limitations: [],
+    screenshot_feature_inventory: [],
+    species_present: [],
+    geographical_context: geo.geographicalContext,
+    restriction_check: geo.restrictionCheck,
+    recommended_spots: [],
+    best_game_plan: [],
+  };
+}
+
+function computeCardinalPrefix(cell_id: string): string {
+  const colLetter = cell_id[0]?.toUpperCase() || 'D';
+  const rowNum = parseInt(cell_id.slice(1), 10) || 4;
+
+  const isNorth = rowNum <= 3;
+  const isSouth = rowNum >= 6;
+  const isWest = colLetter === 'A' || colLetter === 'B' || colLetter === 'C';
+  const isEast = colLetter === 'F' || colLetter === 'G' || colLetter === 'H';
+
+  if (isNorth && isWest) return 'Northwest';
+  if (isNorth && isEast) return 'Northeast';
+  if (isSouth && isWest) return 'Southwest';
+  if (isSouth && isEast) return 'Southeast';
+  if (isNorth) return 'North';
+  if (isSouth) return 'South';
+  if (isWest) return 'West';
+  if (isEast) return 'East';
+  return 'Central';
+}
+
+function buildAnglerWhyThisSpot(
+  kind: FallbackSpotKind,
+  speciesList: string[],
+  cardinal: string,
+  rank: number,
+  inFlowingWater: boolean,
+  isDownstreamLee: boolean
+): string {
+  const speciesPhrase = speciesList.slice(0, 2).join(' and ') || 'target fish';
+
+  switch (kind) {
+    case 'channel_narrowing':
+      if (inFlowingWater) {
+        return `Current velocities compress through this constriction, creating distinct seams and eddy edges where ${speciesPhrase} hold out of the main flow to ambush drifting forage.`;
+      }
+      if (rank === 1) {
+        return `A natural pinch-point funnels cruising fish moving between the quiet northern cove and the main reservoir basin. Cruising ${speciesPhrase} use this bottleneck as an ambush corridor, bringing them within easy casting reach of the shore.`;
+      }
+      return `The lake contour constricts here into a natural bottleneck between basins. Cruising ${speciesPhrase} funnel through this corridor with moving water and forage, creating a high-percentage ambush window.`;
+
+    case 'shore_point':
+      if (inFlowingWater && isDownstreamLee) {
+        return `This point extends into the flow, deflecting current and forming a calm slack-water eddy immediately behind the tip where ${speciesPhrase} rest and pick off disoriented prey.`;
+      }
+      if (rank <= 2) {
+        return `A prominent shoreline point projecting into open water breaks the lake contour line. Predatory ${speciesPhrase} use this structure to corral passing schools of baitfish against the shore, providing an expansive casting arc into multiple depth zones.`;
+      }
+      return `This point juts into open water, deflecting shoreline drift and providing a prime staging drop-off where active ${speciesPhrase} cruise and feed.`;
+
+    case 'sheltered_cove':
+      return `Tucked into the shoreline, this cove is completely shielded from main-lake chop and wind. The warmer, calm water provides safe haven for fry and terrestrial insects, drawing active ${speciesPhrase} into the shallows during midday feeding windows.`;
+
+    case 'shallow_margin':
+      return `An open, gradual shoreline flat offering consistent shallow feeding grounds. Cruising ${speciesPhrase} patrol parallel to the bank during dawn and dusk low-light feeding windows.`;
+
+    case 'steep_shore':
+      return `A steep shoreline transition where the bank drops quickly into deeper water. ${speciesPhrase} cruise directly beneath the bank shade, giving shore anglers immediate access to deep-holding fish without long-distance casting.`;
+
+    case 'open_basin':
+    default:
+      return `Open-water pelagic zone over deeper basin contours where schools of ${speciesPhrase} suspend and feed on forage moving between main shoreline shelves.`;
+  }
 }
 
 /**
- * Analyzes the user's captured map screenshot + geographical elevation/road data + Spain fishing
- * restrictions using Gemini Multimodal Vision (`gemini-3.5-flash-lite` / `gemini-3.8-flash`).
- * Adapts automatically to both zoomed-in tactical selections and wider macro selections.
+ * Analyzes the user's captured satellite screenshot + OSM water mask + road surfaces +
+ * DEM elevation + Spain fishing restrictions using Gemini Multimodal Vision (`gemini-3.5-flash-lite` primary).
  */
 export async function analyzeWaterBodyScreenshot(
   input: AnalyzeWaterBodyScreenshotInput
 ): Promise<WaterBodyArtifactAnalysis> {
   const geo = await buildEnrichedGeospatialContext(
     input.bbox,
-    input.hintWaterBodyId
+    input.hintWaterBodyId,
+    input.clientWaterMask
   );
+
+  // Layer 1 Zero-Hallucination Gate: if verified vector/raster mask confirms zero fishable water,
+  // reject immediately before AI vision or fallback can invent spots on dry terrain.
+  if (geo.waterCellMask.waterPresence === 'no_water') {
+    return buildNoWaterDetectedResponse(geo);
+  }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (apiKey && apiKey !== 'your-gemini-api-key' && input.griddedScreenshotBase64) {
@@ -45,87 +402,92 @@ export async function analyzeWaterBodyScreenshot(
       ''
     );
 
+    const allowedScaleFeatures = getAllowedFeaturesForScale(geo.scaleMode);
     const scaleInstruction =
       geo.scaleMode === 'macro'
-        ? `MACRO / WIDE BASIN SCALE (${geo.widthKm} km × ${geo.heightKm} km): The user selected a larger geographic area. Judge based on the macro hydrological features visible at this scale (main river channel bends, large peninsulas, major tributary mouths/bays, bridges, highway access points, and basin narrows) to place the 6 spots accurately on the water.`
+        ? `MACRO / WIDE BASIN SCALE (${geo.widthKm} km × ${geo.heightKm} km · ~${geo.metersPerPixel} m/px): Small features (weed lines, weed edges, shadows, shoreline cover, fine bottom transitions) CANNOT be resolved reliably at this resolution. Evaluate ONLY macro structures (${allowedScaleFeatures.join(', ')}).`
         : geo.scaleMode === 'meso'
-          ? `SECTOR SCALE (${geo.widthKm} km × ${geo.heightKm} km): Inspect both sector-level peninsulas/bays/roads and visible underwater shoreline color transitions.`
-          : `HIGH-DETAIL TACTICAL SCALE (${geo.widthKm} km × ${geo.heightKm} km): Inspect fine-grained shoreline terrain features (turquoise/tan underwater shelves, individual limestone points, bush overhangs, gravel beaches, and dirt tracks).`;
+          ? `SECTOR SCALE (${geo.widthKm} km × ${geo.heightKm} km · ~${geo.metersPerPixel} m/px): Inspect sector peninsulas, bays, channels, and large shelf transitions; mark uncertain fine cover/flora as topographic_inference or omit if not clearly visible.`
+          : `OPTIMAL FEATURE SCALE (${geo.widthKm} km × ${geo.heightKm} km · ~${geo.metersPerPixel} m/px): High-detail tactical scale — scan carefully for all 12 features (${allowedScaleFeatures.join(', ')}), reporting ONLY those genuinely supported by imagery or shoreline geometry.`;
 
-    const promptText = `You are an expert Spanish fishing guide, satellite imagery photo-interpreter, topographer, and Spanish fisheries regulation specialist.
-The user selected a water body area in Spain (Bounding Box [westLng, southLat, eastLng, northLat]: ${JSON.stringify(input.bbox)}) and captured this screenshot with an 8x8 Coordinate Grid overlaid (Columns A..H left-to-right, Rows 1..8 top-to-bottom: A1..H8).
+    const waterCellsStr =
+      geo.waterCellMask.allowedCells.length > 0
+        ? geo.waterCellMask.allowedCells.join(', ')
+        : 'Inspect screenshot water pixels carefully; place pins ONLY on dark/turquoise water';
+    const dryCellsStr =
+      geo.waterCellMask.dryLandCells.length > 0
+        ? geo.waterCellMask.dryLandCells.join(', ')
+        : 'Any cell showing only trees, hills, scrub, or roads';
 
-=== 1. VERIFIED WATER BODY & INTERNET CONTEXT ===
+    const speciesHintStr = geo.speciesPresentDefaults
+      .map((s) => s.name)
+      .join(', ');
+
+    const promptText = `Analyze this Spanish water body satellite screenshot (Bounding Box [westLng, southLat, eastLng, northLat]: ${JSON.stringify(input.bbox)}).
+
+=== 1. VERIFIED WATER BODY & FISH SPECIES CONTEXT ===
 - Recognized Water Body: ${geo.waterBodyName}
 - Region & Autonomous Community: ${geo.regionLabel} (${geo.autonomousCommunity})
+- Known Regional Species: ${speciesHintStr}
+- Live Biological Sightings: ${geo.liveSpeciesSummary}
 - Nearby Wikipedia / OSM Landmarks: ${geo.landmarks.join(', ') || 'Inspect screenshot for peninsulas, coves, bridges, and dams'}
-${geo.wikipediaExtract ? `- Official Hydrological / Encyclopedia Summary: ${geo.wikipediaExtract}` : ''}
+- Hydrology / Current Direction: ${geo.flowContext.flowDirectionSummary}
+${geo.wikipediaExtract ? `- Official Hydrological Summary: ${geo.wikipediaExtract}` : ''}
 
-=== 2. SELECTION SCALE & QUALITY ADAPTATION ===
+=== 2. WATER-ONLY PLACEMENT MASK (MANDATORY) ===
+- WATER_MASK_STATUS: ${geo.waterCellMask.waterPresence} (${geo.rasterWaterMask ? `${geo.rasterWaterMask.waterCoveragePct}% raster surface water` : `OSM polygons: ${geo.waterPolygons.length}`})
+- ALLOWED_WATER_CELLS: [${waterCellsStr}]
+- DRY_LAND_FORBIDDEN_CELLS: [${dryCellsStr}]
+- Place EVERY pin (x_percent, y_percent) strictly on visible water pixels inside ALLOWED_WATER_CELLS!
+- If the screenshot shows ONLY dry land/forest/roads with no fishable water visible, set has_fishable_water=false and recommended_spots=[].
+
+=== 3. SELECTION SCALE ===
 - ${scaleInstruction}
 
-=== 3. GEOGRAPHICAL FEATURES: ALTITUDE, BANK SLOPE & ROAD/SHORE ACCESS ===
-- Water Surface Altitude: ~${geo.geographicalContext.water_elevation_m} meters above sea level (Surrounding terrain relief: +${geo.geographicalContext.relief_range_m}m)
-- Detected Perimeter Roads / Tracks: ${geo.geographicalContext.road_access_summary}
-- Shoreline Steepness & Accessibility by Grid Sector (Open-Meteo 90m DEM):
+=== 4. TERRAIN, ALTITUDE & ROAD SURFACE ACCESS ===
+- Water Surface Altitude: ~${geo.geographicalContext.water_elevation_m}m ASL (Surrounding relief: +${geo.geographicalContext.relief_range_m}m)
+- OSM Road & Track Surfaces: ${geo.roadPromptSummary}
+- Shoreline Steepness by Sector:
 ${geo.sectorSlopePromptSummary}
-- CRITICAL GEOGRAPHY RULE: Account for elevation, road availability, and shore steepness in every spot description and in the Best Game Plan! Clearly state if a spot has direct road/foot access on a flat bank OR if it sits below a steep canyon cliff requiring a hike along the water's edge or kayak/boat positioning.
 
-=== 4. SPAIN FISHING RESTRICTIONS & REGULATORY CHECK ===
+=== 5. SPAIN FISHING RESTRICTIONS ===
 - Status: ${geo.restrictionCheck.status_label}
-- Required Permits: ${geo.restrictionCheck.permits_required}
-- Prohibited / Safety Exclusion Zones: ${geo.restrictionCheck.prohibited_zones_warning}
-- NEVER place a recommended spot on a dam wall (presa), spillway, or restricted industrial/reserve exclusion zone.
+- Permits: ${geo.restrictionCheck.permits_required}
+- Exclusion Zones: ${geo.restrictionCheck.prohibited_zones_warning}
+- NEVER place a spot on a dam wall (presa), spillway, or restricted reserve.
 
-=== 5. ANGLER LURES / GEAR ===
-- ${input.anglerGearNote || 'Spinning lures (WETA+ No. 3 7g, WETA No. 2 5g) and Texas-rigged soft plastics (Yubari Craw, Yubari Worm 100mm)'}
+=== 6. ANGLER LURES / TARGET ===
+- ${input.anglerGearNote?.trim() || 'No fixed gear preset: tailor lure/bait & rig tactics per spot to the target species and spot structure (spinning, feeder, float, fly, or soft-plastic rigs).'}
 
-=== 6. SPOT PLACEMENT INSTRUCTIONS (SPOTS 1..6) ===
-1. Look directly at the attached A1–H8 gridded screenshot image! Every spot's (x_percent: 5..95, y_percent: 5..95) and cell_id (A1..H8) MUST sit directly on the water/shoreline visible in THIS image!
-2. Select 6 distinct fishing spots visible in THIS image:
-   - Rank 1 & Rank 2 (color: "red"): Primary Trophy Points & Best Underwater Transition Lines (include badge e.g. "🏆 (The #1 Trophy Point)" / "🏆 (Best Transition Line)").
-   - Rank 3 & Rank 4 (color: "blue"): Sheltered Bays & Best Road/Foot-Accessible Shore Coves (prioritize sectors with gentle slope and road/track access!).
-   - Rank 5 & Rank 6 (color: "orange"): Canyon S-Bends, Current Bottlenecks, Tributary Mouths & Gateway Points.
+=== 7. 12-FEATURE EXTRACTION & HONEST EVALUATION ===
+- ALLOWED_FEATURES_FOR_SCALE: [${allowedScaleFeatures.join(', ')}]
+- Extract ONLY features genuinely supported at each spot (1 to 12 features; NEVER invent features to hit a quota—if a spot only shows 1 or 2 real features, report 1 or 2 honestly).
+- Mark seasonal/time-varying cues (weed_line, weed_edge, shadow) as historical reference from static satellite imagery; never promise live vegetation.
+- Note any glare, turbidity, cloud shadow, or zoom limits in extraction_limitations.
+- Provide a concise 1-2 sentence rating_justification per spot; the server computes deterministic 1.0-10.0 ratings and sorts Rank 1..6 descending.`;
 
-Return ONLY valid JSON with this structure:
-{
-  "water_body_name": "${geo.waterBodyName}",
-  "region_label": "${geo.regionLabel}",
-  "water_body_summary": "2-3 sentence overview covering the water body, altitude (${geo.geographicalContext.water_elevation_m}m ASL), shore accessibility, and target species",
-  "recommended_spots": [
-    {
-      "rank": 1,
-      "color": "red",
-      "cell_id": "E5",
-      "grid_cells_label": "Grid E5 / F5",
-      "badge": "🏆 (The #1 Trophy Point)",
-      "title": "Descriptive name of the specific feature in this cell",
-      "x_percent": 58.5,
-      "y_percent": 56.0,
-      "why_label": "Why it's #1:",
-      "why_this_spot": "Detailed explanation of the visual feature in this grid cell",
-      "secondary_label": "Terrain & Shore Access:",
-      "secondary_text": "Water depth/color transition + bank slope and road/foot accessibility right here",
-      "how_to_fish": "Specific casting & retrieve advice using the angler's lures"
-    }
-  ],
-  "best_game_plan": [
-    "Step 1: Where to drive/park (citing road/track access and gentle bank slope) and which grid cell to fish first...",
-    "Step 2: How to move along the accessible shoreline contour to the next spots...",
-    "Step 3: How to approach the main trophy drop-off and respect local Spain Coto/permit rules..."
-  ]
-}`;
-
-    const candidateModels = [
-      'gemini-3.5-flash-lite',
-      'gemini-3.8-flash',
-      'gemini-3-flash-preview',
+    const primaryModel =
+      process.env.GEMINI_VISION_MODEL?.trim() || 'gemini-2.5-flash';
+    const candidateModels: {
+      name: string;
+      thinkingBudget?: number;
+      timeoutMs: number;
+    }[] = [
+      { name: primaryModel, thinkingBudget: 0, timeoutMs: 12000 },
+      ...(primaryModel !== 'gemini-2.5-flash-lite'
+        ? [{ name: 'gemini-2.5-flash-lite', timeoutMs: 9000 }]
+        : []),
     ];
 
-    for (const modelName of candidateModels) {
+    const llmDeadline = Date.now() + 20000;
+
+    for (const candidate of candidateModels) {
+      const remainingMs = llmDeadline - Date.now();
+      if (remainingMs < 2500) break;
+
       try {
         const response = await ai.models.generateContent({
-          model: modelName,
+          model: candidate.name,
           contents: [
             {
               inlineData: {
@@ -136,83 +498,181 @@ Return ONLY valid JSON with this structure:
             { text: promptText },
           ],
           config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
-            temperature: 0.3,
-            abortSignal: AbortSignal.timeout(15000),
+            responseSchema: SCREENSHOT_RESPONSE_SCHEMA,
+            temperature: 0.2,
+            ...(candidate.thinkingBudget !== undefined
+              ? { thinkingConfig: { thinkingBudget: candidate.thinkingBudget } }
+              : {}),
+            abortSignal: AbortSignal.timeout(
+              Math.min(candidate.timeoutMs, remainingMs)
+            ),
           },
         });
 
         if (response.text) {
-          const parsed = JSON.parse(response.text) as WaterBodyArtifactAnalysis;
+          const parsed = JSON.parse(response.text) as Partial<WaterBodyArtifactAnalysis>;
+          if (parsed.has_fishable_water === false) {
+            return buildNoWaterDetectedResponse(geo, parsed.no_water_reason);
+          }
+
           if (
             parsed.recommended_spots &&
             Array.isArray(parsed.recommended_spots) &&
-            parsed.recommended_spots.length >= 4
+            parsed.recommended_spots.length >= 1
           ) {
-            const normalizedSpots: GridArtifactSpot[] = parsed.recommended_spots
+            const rawSpots: GridArtifactSpot[] = parsed.recommended_spots
               .slice(0, 6)
               .map((s, idx) => {
                 const rank = idx + 1;
-                const x = Math.max(5, Math.min(95, Number(s.x_percent) || 50));
-                const y = Math.max(5, Math.min(95, Number(s.y_percent) || 50));
+                const x = Math.max(3, Math.min(97, Number(s.x_percent) || 50));
+                const y = Math.max(3, Math.min(97, Number(s.y_percent) || 50));
                 const computedCell = percentToCellId(x, y);
-                const validCell = /^[A-H][1-8]$/.test(s.cell_id)
-                  ? s.cell_id
-                  : computedCell;
                 const color =
-                  rank <= 2 ? 'red' : rank <= 4 ? 'blue' : 'orange';
+                  rank <= 2 ? 'green' : rank <= 4 ? 'blue' : 'yellow';
+
+                const parsedExtracted: ExtractedSpotFeature[] = Array.isArray(
+                  s.extracted_features
+                )
+                  ? s.extracted_features
+                      .filter(
+                        (item): item is ExtractedSpotFeature =>
+                          Boolean(item && typeof item === 'object' && 'feature' in item)
+                      )
+                      .map((item) => ({
+                        feature: item.feature,
+                        observation_type:
+                          item.observation_type === 'topographic_inference'
+                            ? 'topographic_inference'
+                            : 'directly_visible',
+                        visual_cue: String(item.visual_cue || '').trim(),
+                      }))
+                  : [];
+
+                const influencing_features =
+                  Array.isArray(s.influencing_features) && s.influencing_features.length > 0
+                    ? s.influencing_features.map((f) => String(f).trim()).filter(Boolean)
+                    : undefined;
+
+                const why_rank_summary =
+                  Array.isArray(s.why_rank_summary) && s.why_rank_summary.length > 0
+                    ? s.why_rank_summary.map((b) => String(b).trim()).filter(Boolean)
+                    : undefined;
 
                 return {
                   rank,
                   color,
-                  cell_id: validCell,
-                  grid_cells_label: s.grid_cells_label || `Grid ${validCell}`,
-                  badge:
-                    s.badge ||
-                    (rank === 1
-                      ? '🏆 (The #1 Trophy Point)'
-                      : rank === 2
-                        ? '🏆 (Best Transition Line)'
-                        : undefined),
-                  title: s.title || `Sector ${validCell} Structure`,
+                  cell_id: computedCell,
+                  grid_cells_label: s.grid_cells_label || `Grid ${computedCell}`,
+                  badge: s.badge,
+                  title: s.title || `Sector ${computedCell} Water Structure`,
                   x_percent: x,
                   y_percent: y,
-                  why_label:
-                    s.why_label ||
-                    (rank === 1
-                      ? "Why it's #1:"
-                      : rank === 2
-                        ? "Why it's incredible:"
-                        : "Why it's great:"),
+                  target_species:
+                    Array.isArray(s.target_species) && s.target_species.length > 0
+                      ? s.target_species
+                      : geo.speciesPresentDefaults.slice(0, 2).map((sp) => sp.name),
+                  access_mode: normalizeAccessMode(s.access_mode),
+                  access_summary:
+                    s.access_summary || geo.geographicalContext.road_access_summary,
+                  depth_structure: s.depth_structure || 'Shoreline shelf / drop-off',
+                  why_label: s.why_label || 'Feature Breakdown:',
                   why_this_spot: s.why_this_spot || '',
                   secondary_label: s.secondary_label || 'Terrain & Access:',
                   secondary_text: s.secondary_text,
                   how_to_fish: s.how_to_fish || '',
+                  stacked_x_count:
+                    typeof s.stacked_x_count === 'number' ? s.stacked_x_count : undefined,
+                  influencing_features,
+                  why_rank_summary,
+                  extracted_features: parsedExtracted,
+                  rating_justification:
+                    typeof s.rating_justification === 'string'
+                      ? s.rating_justification.trim()
+                      : undefined,
                 };
               });
 
+            const waterConstrained = constrainSpotsToWaterMask(
+              rawSpots,
+              input.bbox,
+              geo.waterPolygons,
+              geo.rasterWaterMask
+            ).map((spot) => enrichSpotWithRoadAccess(spot, input.bbox, geo));
+
+            const { ratedSpots, limitations, inventory } = rankAndRateSpots(
+              waterConstrained,
+              geo.scaleMode
+            );
+
+            const llmLimitations = Array.isArray(parsed.extraction_limitations)
+              ? parsed.extraction_limitations.map((l) => String(l).trim()).filter(Boolean)
+              : [];
+            const combinedLimitations = Array.from(
+              new Set([...llmLimitations, ...limitations])
+            );
+
+            const llmInventory = Array.isArray(parsed.screenshot_feature_inventory)
+              ? parsed.screenshot_feature_inventory.filter((k): k is AnglerFeatureKey =>
+                  (ALL_ANGLER_FEATURE_KEYS as string[]).includes(String(k))
+                )
+              : [];
+            const combinedInventory = Array.from(
+              new Set([...llmInventory, ...inventory])
+            );
+
+            const normalizedRegion = (parsed.region_label || geo.regionLabel).replace(
+              /\bEspaña\b/g,
+              'Spain'
+            );
+
             return {
+              report_id: generateReportId(),
+              app_version: APP_VERSION,
+              generated_at: formatReportTimestamp(),
+              has_fishable_water: true,
+              water_coverage_pct:
+                geo.rasterWaterMask?.waterCoveragePct ?? parsed.water_coverage_pct,
+              analysis_source: 'gemini_vision',
               water_body_name: parsed.water_body_name || geo.waterBodyName,
-              region_label: parsed.region_label || geo.regionLabel,
+              region_label: normalizedRegion,
               water_body_summary:
                 parsed.water_body_summary ||
-                `AI terrain, altitude (${geo.geographicalContext.water_elevation_m}m ASL), and hydrological analysis of ${geo.waterBodyName}.`,
+                `Satellite, terrain (${geo.geographicalContext.water_elevation_m}m ASL), road-surface & Spain regulatory analysis of ${geo.waterBodyName}.`,
+              imagery_freshness_note: IMAGERY_FRESHNESS_NOTE,
+              extraction_limitations: combinedLimitations,
+              screenshot_feature_inventory: combinedInventory,
+              species_present: normalizeSpeciesList(
+                parsed.species_present,
+                geo.speciesPresentDefaults
+              ),
               geographical_context: geo.geographicalContext,
               restriction_check: geo.restrictionCheck,
-              recommended_spots: normalizedSpots,
+              recommended_spots: ratedSpots,
               best_game_plan:
                 parsed.best_game_plan && parsed.best_game_plan.length >= 2
                   ? parsed.best_game_plan
-                  : [
-                      `Approach via ${geo.detectedRoads[0] || 'the primary perimeter access road'} and park near Spot 4 (${normalizedSpots[3]?.grid_cells_label ?? 'Grid D1'}) where the bank slope is gentlest.`,
-                      `Walk along the accessible shoreline contour to Spot 2 (${normalizedSpots[1]?.grid_cells_label ?? 'Grid E2'}) to work the underwater shelf transition.`,
-                      `Target peak feeding windows on the primary drop-off at Spot 1 (${normalizedSpots[0]?.grid_cells_label ?? 'Grid F6'}).`,
-                    ],
+                  : buildDynamicGamePlan(
+                      ratedSpots,
+                      input.bbox,
+                      geo.autonomousCommunity,
+                      geo.waterPolygons,
+                      geo.rasterWaterMask?.grid64Mask
+                    ),
             };
           }
+          return buildNoWaterDetectedResponse(
+            geo,
+            parsed.no_water_reason ||
+              'No fishable water body spots could be confirmed in this image.'
+          );
         }
-      } catch {
-        // Try next candidate model or fallback below
+      } catch (err) {
+        console.warn(
+          `[ai-advisor] Vision model ${candidate.name} failed, trying fallback:`,
+          err instanceof Error ? err.message : String(err)
+        );
       }
     }
   }
@@ -225,176 +685,790 @@ function buildFallbackGeospatialAnalysis(
   bbox: BoundingBox,
   anglerGearNote?: string
 ): WaterBodyArtifactAnalysis {
-  const [minLng, minLat, maxLng, maxLat] = bbox;
-  const centerLng = (minLng + maxLng) / 2;
-  const centerLat = (minLat + maxLat) / 2;
+  // Zero-hallucination guard: never scatter arbitrary points if water cannot be confirmed
+  if (
+    geo.waterCellMask.waterPresence === 'no_water' ||
+    (geo.waterCellMask.waterPresence === 'unknown' && !geo.matchedRecord)
+  ) {
+    return buildNoWaterDetectedResponse(
+      geo,
+      'Live AI vision is temporarily busy and no verified river, reservoir, lake, or coast polygon was confirmed inside this area. Pan over visible water and retry.'
+    );
+  }
 
-  const isDefaultCortesBbox =
-    Math.abs(centerLng - -0.946) < 0.015 &&
-    Math.abs(centerLat - 39.242) < 0.015;
+  const candidatePool = sampleDistinctWaterCoordinates(
+    bbox,
+    geo.waterPolygons,
+    geo.rasterWaterMask,
+    16
+  );
 
-  if (isDefaultCortesBbox || geo.matchedRecord?.id === 'wb-es-cortes-valencia') {
+  if (candidatePool.length === 0) {
+    return buildNoWaterDetectedResponse(geo);
+  }
+
+  const classifiedPool = candidatePool.map((coord) => ({
+    coord,
+    geom: classifyWaterCoordGeometry(
+      coord,
+      bbox,
+      geo.waterPolygons,
+      resolveLocalSectorReliefM(
+        geo.demSectorSamples,
+        coord.x_percent,
+        coord.y_percent,
+        geo.geographicalContext.relief_range_m
+      ),
+      geo.rasterWaterMask?.grid64Mask,
+      geo.flowContext
+    ),
+  }));
+
+  const selectedPool = selectDiverseSpotGeometries(
+    classifiedPool.map((item) => ({ ...item, kind: item.geom.kind })),
+    6
+  );
+  const verifiedWaterCoords = selectedPool.map((item) => item.coord);
+  const spotGeometries = selectedPool.map((item) => item.geom);
+
+  const dynamicSpots: GridArtifactSpot[] = verifiedWaterCoords.map((coord, idx) => {
+    const rank = idx + 1;
+    const geom = spotGeometries[idx];
+    const [spotLng, spotLat] = percentToLngLat(coord.x_percent, coord.y_percent, bbox);
+    const accessInfo = classifySpotRoadAccess({
+      spotLng,
+      spotLat,
+      roads: geo.roads,
+      sectorReliefM: geom.localReliefM,
+      isOffshoreOpenWater: geom.shoreDistanceM > 50,
+      shoreDistanceM: geom.shoreDistanceM,
+      shoreDirection: geom.shoreDirection,
+    });
+
+    const spotSpecies = selectSpeciesForSpotGeometry(
+      geom.kind,
+      geo.speciesPresentDefaults,
+      idx
+    );
+    const tactics = buildStructureMatchedTactics(
+      geom.kind,
+      spotSpecies,
+      anglerGearNote,
+      idx,
+      geom.shoreDirection,
+      geom.shoreDistanceM,
+      geom.inFlowingWater ? geo.flowContext : undefined,
+      geom.isDownstreamLee,
+      geom.inFlowingWater !== false
+    );
+
+    const cardinal = computeCardinalPrefix(coord.cell_id);
+    const spotTitle = `${cardinal} ${geom.baseTitle || geom.title}`;
+    const whyThisSpot = buildAnglerWhyThisSpot(
+      geom.kind,
+      spotSpecies,
+      cardinal,
+      rank,
+      geom.inFlowingWater !== false,
+      Boolean(geom.isDownstreamLee)
+    );
+
     return {
-      water_body_name: geo.waterBodyName,
-      region_label: geo.regionLabel,
-      water_body_summary: `AI satellite, elevation (${geo.geographicalContext.water_elevation_m}m ASL), and Spain regulatory analysis for ${geo.waterBodyName} (${geo.regionLabel}). Identified 6 high-probability grid spots accounting for underwater shelf transitions, CV-428 road access, and bank steepness.`,
-      geographical_context: geo.geographicalContext,
-      restriction_check: geo.restrictionCheck,
-      recommended_spots: [
-        {
-          rank: 1,
-          color: 'red',
-          cell_id: 'F6',
-          grid_cells_label: 'Grid E6 / F6',
-          badge: '🏆 (The #1 Trophy Point)',
-          title: 'Tip of the Dehesa de Cortes Peninsula',
-          x_percent: 62.6,
-          y_percent: 69.6,
-          why_label: "Why it's #1:",
-          why_this_spot:
-            'This huge peninsula sits at the main crossroads of the reservoir—where the northern river channel meets the western bay and the deep main basin.',
-          secondary_label: 'The Terrain & Access:',
-          secondary_text:
-            'Look at the bright white/turquoise rocky rim around the tip—it plunges straight into deep navy water. Accessible by walking out along the Dehesa de Cortes peninsula spine from the western track.',
-          how_to_fish:
-            'Stand on the white limestone point, cast your WETA+ No. 3 (7g) out into the deep blue, count to 6 so it sinks deep, and retrieve steadily. Or bounce your Texas-rigged Yubari Craw down the rocky steps.',
-        },
-        {
-          rank: 2,
-          color: 'red',
-          cell_id: 'E2',
-          grid_cells_label: 'Grid E2 / E3',
-          badge: '🏆 (Best Transition Line)',
-          title: 'The Underwater Shelf Below Playa del Ral',
-          x_percent: 58.0,
-          y_percent: 21.8,
-          why_label: "Why it's incredible:",
-          why_this_spot:
-            'Look closely at grid cells E2 and E3 along the west shore—you can clearly see a long, light-tan and green underwater ledge (escalón) with submerged grass before it drops sharply into the dark blue channel.',
-          secondary_label: 'Why fish love it & Road Access:',
-          secondary_text:
-            'Baitfish (alburnos) and crayfish hide on that shallow green shelf, while predatory bass patrol right along the color change. Easily accessible from the road (CV-428 spur) running right behind D2/E2.',
-          how_to_fish:
-            'Walk 150m south from Playa del Ral along the gentle bank contour. Cast past the ledge into the dark water and reel your spinner up over the shelf edge!',
-        },
-        {
-          rank: 3,
-          color: 'blue',
-          cell_id: 'C7',
-          grid_cells_label: 'Grid B6 / C6',
-          title: 'Carpa Cofrentes Sheltered Bay',
-          x_percent: 28.8,
-          y_percent: 74.0,
-          why_label: "Why it's great:",
-          why_this_spot:
-            'The access track leads right down to the water here. This long western inlet has a gentle bank slope (~450m ASL) and is completely sheltered from wind and waves.',
-          how_to_fish:
-            'Notice how the pine trees and bushes grow right down to the shoreline. Cast your WETA No. 2 (5g) down the open middle, and switch to your weedless Texas-rigged Yubari Worm (100mm) to pitch right next to submerged shoreline bushes without getting snagged.',
-        },
-        {
-          rank: 4,
-          color: 'blue',
-          cell_id: 'E1',
-          grid_cells_label: 'Grid D1 / E1',
-          title: 'Playa del Ral Beach Cove',
-          x_percent: 51.5,
-          y_percent: 6.8,
-          why_label: "Why it's great:",
-          why_this_spot:
-            'Direct car access right to the northern bank via CV-428. It has the flattest, easiest gravelly "beach" footing on the lake (~450m elevation). In the afternoon (14:00–16:30), the sun warms this shallow northern bowl, pulling active fish up into the shallows.',
-          how_to_fish:
-            'Fan-cast across the shallow gravel bowl during the warm afternoon window with light spinners or finesse soft plastics.',
-        },
-        {
-          rank: 5,
-          color: 'orange',
-          cell_id: 'E4',
-          grid_cells_label: 'Grid E4',
-          title: 'The Canyon S-Bend & Powerline Point',
-          x_percent: 53.6,
-          y_percent: 42.5,
-          why_label: "Why it's great:",
-          why_this_spot:
-            'Right where the canyon narrows into an S-curve and overhead powerlines cross the water. When the dam releases water, current speeds up through this narrow bottleneck, activating predators.',
-          how_to_fish:
-            'Cast quartering upstream into the bottleneck current seam and let your lure swing across the rocky point.',
-        },
-        {
-          rank: 6,
-          color: 'orange',
-          cell_id: 'E7',
-          grid_cells_label: 'Grid E7',
-          title: 'Southern Gate of the Western Arm',
-          x_percent: 58.0,
-          y_percent: 79.6,
-          why_label: "Why it's great:",
-          why_this_spot:
-            'The steep rocky point opposite Spot 1. Together with Spot 1, it forms the narrow gateway into the Carpa Cofrentes bay (note: southern cliff rises sharply to >700m, so approach along the lower shoreline margin or by kayak).',
-          how_to_fish:
-            'Work deep-running lures or bottom-bounced craws along the steep gateway wall where fish enter and exit the western arm.',
-        },
-      ],
-      best_game_plan: [
-        "Drive down to Playa del Ral (Spot 4, Grid D1/E1) first via CV-428—it's the flattest, easiest place to park and get comfortable casting on level gravel ground (~450m ASL).",
-        'Walk 150 meters south along the accessible western shoreline to Spot 2 (Grid E2/E3) and thoroughly fish that long underwater ledge!',
-        'Later in the afternoon, drive or hike down the western track toward Carpa Cofrentes (Spot 3) and work your way out along the peninsula shoreline toward the big trophy point at Spot 1 (Grid E6/F6).',
+      rank,
+      color: rank <= 2 ? 'green' : rank <= 4 ? 'blue' : 'yellow',
+      cell_id: coord.cell_id,
+      grid_cells_label: `Grid ${coord.cell_id}`,
+      title: spotTitle,
+      x_percent: coord.x_percent,
+      y_percent: coord.y_percent,
+      target_species: spotSpecies,
+      access_mode: accessInfo.access_mode,
+      access_summary: accessInfo.access_summary,
+      depth_structure: geom.depthStructure,
+      why_label: 'Why this spot:',
+      why_this_spot: whyThisSpot,
+      secondary_label: 'Terrain & Access:',
+      secondary_text: accessInfo.access_summary,
+      how_to_fish: tactics,
+      extracted_features: geom.features,
+    };
+  });
+
+  const constrainedDynamic = constrainSpotsToWaterMask(
+    dynamicSpots,
+    bbox,
+    geo.waterPolygons,
+    geo.rasterWaterMask
+  ).map((spot) => enrichSpotWithRoadAccess(spot, bbox, geo));
+
+  const { ratedSpots, limitations, inventory } = rankAndRateSpots(
+    constrainedDynamic,
+    geo.scaleMode
+  );
+
+  const extraLimitations: string[] = [];
+  if (geo.waterPolygons.length === 0 && geo.rasterWaterMask) {
+    extraLimitations.push(
+      'OSM Overpass vector polygons were unavailable; spot positions rely strictly on OSM raster water pixels.'
+    );
+  }
+
+  return {
+    report_id: generateReportId(),
+    app_version: APP_VERSION,
+    generated_at: formatReportTimestamp(),
+    has_fishable_water: true,
+    water_coverage_pct: geo.rasterWaterMask?.waterCoveragePct,
+    analysis_source: 'geospatial_fallback',
+    water_body_name: geo.waterBodyName,
+    region_label: geo.regionLabel.replace(/\bEspaña\b/g, 'Spain'),
+    water_body_summary: `${geo.geographicalContext.scale_label} for ${geo.waterBodyName} (${geo.regionLabel.replace(/\bEspaña\b/g, 'Spain')}) at ~${geo.geographicalContext.water_elevation_m}m ASL (DEM est.).`,
+    imagery_freshness_note: IMAGERY_FRESHNESS_NOTE,
+    extraction_limitations: [
+      'Shoreline contours and access inferred conservatively from hydrographic geometry, road network, and DEM elevation models (verify local water levels and bank footing on site).',
+      ...extraLimitations,
+      ...limitations,
+    ],
+    screenshot_feature_inventory: inventory,
+    species_present: geo.speciesPresentDefaults,
+    geographical_context: geo.geographicalContext,
+    restriction_check: geo.restrictionCheck,
+    recommended_spots: ratedSpots,
+    best_game_plan: buildDynamicGamePlan(
+      ratedSpots,
+      bbox,
+      geo.autonomousCommunity,
+      geo.waterPolygons,
+      geo.rasterWaterMask?.grid64Mask,
+      geo.flowContext
+    ),
+  };
+}
+
+type FallbackSpotKind =
+  | 'shore_point'
+  | 'sheltered_cove'
+  | 'channel_narrowing'
+  | 'steep_shore'
+  | 'shallow_margin'
+  | 'offshore_transition'
+  | 'open_basin';
+
+function capitalizeDir(dir: CardinalDirection): string {
+  return dir.charAt(0).toUpperCase() + dir.slice(1);
+}
+
+function longestContiguousRun(flags: boolean[]): number {
+  if (flags.length === 0) return 0;
+  const doubled = [...flags, ...flags];
+  let best = 0;
+  let cur = 0;
+  for (const f of doubled) {
+    if (f) {
+      cur++;
+      if (cur > best) best = cur;
+    } else {
+      cur = 0;
+    }
+  }
+  return Math.min(flags.length, best);
+}
+
+export function classifyWaterCoordGeometry(
+  coord: { x_percent: number; y_percent: number; cell_id: string },
+  bbox: BoundingBox,
+  waterPolygons: WaterGeometryFeature[],
+  localReliefM: number,
+  grid64Mask?: string,
+  flowContext?: FlowContext
+): {
+  kind: FallbackSpotKind;
+  kindLabel: string;
+  baseTitle?: string;
+  title: string;
+  depthStructure: string;
+  localReliefM: number;
+  shoreDistanceM: number;
+  shoreDirection: CardinalDirection;
+  inFlowingWater?: boolean;
+  isDownstreamLee?: boolean;
+  features: ExtractedSpotFeature[];
+} {
+  const [lng, lat] = percentToLngLat(coord.x_percent, coord.y_percent, bbox);
+  const shoreLines = waterPolygons.flatMap((poly) => {
+    const rings =
+      poly.geometry.type === 'Polygon'
+        ? [poly.geometry.coordinates[0]]
+        : poly.geometry.coordinates.map((c) => c[0]);
+    return rings.filter((r) => r && r.length >= 2).map((r) => lineString(r));
+  });
+
+  const metrics = computeShoreMetrics(
+    coord.x_percent,
+    coord.y_percent,
+    bbox,
+    waterPolygons,
+    shoreLines,
+    grid64Mask
+  );
+  const { shoreDistanceM, shoreDirection, nearestShoreLngLat } = metrics;
+  const inFlowingWater = flowContext
+    ? isPointInFlowingWater(lng, lat, flowContext)
+    : true;
+  const isDownstreamLee =
+    flowContext && nearestShoreLngLat
+      ? isDownstreamLeeOfShore(
+          lng,
+          lat,
+          nearestShoreLngLat[0],
+          nearestShoreLngLat[1],
+          flowContext.flowBearingDeg
+        )
+      : false;
+  const dirCap = capitalizeDir(shoreDirection);
+
+  // Metric-scaled 12-bearing angular probe around the water pin (and nearest shore tip)
+  const [minLng, minLat, maxLng, maxLat] = bbox;
+  const spanM = Math.max(
+    (maxLng - minLng) * 111_320 * Math.cos((lat * Math.PI) / 180),
+    (maxLat - minLat) * 110_574
+  );
+  const cellSizeM = spanM / 64;
+  const probeRadiusM =
+    waterPolygons.length > 0 ? 30 : Math.max(30, Math.round(cellSizeM * 1.15));
+
+  const isWaterAtLngLat = (pLng: number, pLat: number): boolean => {
+    if (waterPolygons.length > 0) {
+      return waterPolygons.some((wp) => booleanPointInPolygon(point([pLng, pLat]), wp));
+    }
+    if (grid64Mask && grid64Mask.length === 4096) {
+      const px = ((pLng - minLng) / Math.max(1e-6, maxLng - minLng)) * 100;
+      const py = ((maxLat - pLat) / Math.max(1e-6, maxLat - minLat)) * 100;
+      if (px < 0 || px > 100 || py < 0 || py > 100) return false;
+      return isPercentOnRasterWater(grid64Mask, px, py, 0);
+    }
+    return true;
+  };
+
+  const offsetMeters = (
+    oLng: number,
+    oLat: number,
+    distM: number,
+    degClockwiseNorth: number
+  ): [number, number] => {
+    const rad = (degClockwiseNorth * Math.PI) / 180;
+    const dLat = (distM * Math.cos(rad)) / 110_574;
+    const dLng =
+      (distM * Math.sin(rad)) / (111_320 * Math.max(0.1, Math.cos((oLat * Math.PI) / 180)));
+    return [oLng + dLng, oLat + dLat];
+  };
+
+  const landArcPin: boolean[] = [];
+  for (let i = 0; i < 12; i++) {
+    const [pLng, pLat] = offsetMeters(lng, lat, probeRadiusM, i * 30);
+    landArcPin.push(!isWaterAtLngLat(pLng, pLat));
+  }
+  const hasOppositeLandWalls = [0, 1, 2, 3, 4, 5].some(
+    (i) => landArcPin[i] && landArcPin[i + 6]
+  );
+  const maxLandContigPin = longestContiguousRun(landArcPin);
+
+  let maxWaterContigShoreTip = 0;
+  if (nearestShoreLngLat && shoreDistanceM <= 75) {
+    const tipProbeRadiusM = Math.max(
+      probeRadiusM,
+      Math.min(240, Math.round(spanM * 0.06))
+    );
+    const waterArcTip: boolean[] = [];
+    for (let i = 0; i < 12; i++) {
+      const [pLng, pLat] = offsetMeters(
+        nearestShoreLngLat[0],
+        nearestShoreLngLat[1],
+        tipProbeRadiusM,
+        i * 30
+      );
+      waterArcTip.push(isWaterAtLngLat(pLng, pLat));
+    }
+    maxWaterContigShoreTip = longestContiguousRun(waterArcTip);
+  }
+
+  // 1. True channel / bottleneck (opposing banks <= ~60m apart)
+  if (hasOppositeLandWalls && shoreDistanceM <= 75) {
+    const channelFeatures: ExtractedSpotFeature[] = inFlowingWater
+      ? [
+          {
+            feature: 'channel',
+            observation_type: 'topographic_inference',
+            visual_cue: `Opposing banks enclosing narrowed corridor (~${shoreDistanceM}m to ${shoreDirection} bank)`,
+          },
+          {
+            feature: 'current_break',
+            observation_type: 'topographic_inference',
+            visual_cue:
+              flowContext?.upstreamCardinal && flowContext?.flowCardinal
+                ? `Flow seam (${flowContext.upstreamCardinal} -> ${flowContext.flowCardinal}) along channel constriction`
+                : 'Flow alignment & eddy seam along channel constriction',
+          },
+        ]
+      : [
+          {
+            feature: 'channel',
+            observation_type: 'topographic_inference',
+            visual_cue: `Opposing banks enclosing narrowed stillwater neck (~${shoreDistanceM}m to ${shoreDirection} bank)`,
+          },
+          {
+            feature: 'depth_change',
+            observation_type: 'topographic_inference',
+            visual_cue: 'Neck transition between cove and main basin',
+          },
+        ];
+    return {
+      kind: 'channel_narrowing',
+      kindLabel: inFlowingWater
+        ? 'channel corridor / narrowing'
+        : 'stillwater constriction neck',
+      baseTitle: inFlowingWater ? 'Channel Bottleneck' : 'Constriction Neck',
+      title: inFlowingWater ? 'Channel Bottleneck' : 'Constriction Neck',
+      depthStructure: inFlowingWater
+        ? `Narrowed channel corridor (nearest bank ~${shoreDistanceM}m ${shoreDirection} of pin)`
+        : `Narrowed cove/lake pass (nearest bank ~${shoreDistanceM}m ${shoreDirection} of pin)`,
+      localReliefM,
+      shoreDistanceM,
+      shoreDirection,
+      inFlowingWater,
+      isDownstreamLee,
+      features: channelFeatures,
+    };
+  }
+
+  // 2. Peninsula / Point tip (water wraps > 200° around the nearest shore tip)
+  if (maxWaterContigShoreTip >= 7 && shoreDistanceM <= 75) {
+    const pointFeatures: ExtractedSpotFeature[] = inFlowingWater
+      ? [
+          {
+            feature: 'point',
+            observation_type: 'topographic_inference',
+            visual_cue: `Peninsula / point tip protruding into water (>200° water arc, shore ~${shoreDistanceM}m ${shoreDirection} of pin)`,
+          },
+          {
+            feature: 'current_break',
+            observation_type: 'topographic_inference',
+            visual_cue:
+              isDownstreamLee && flowContext?.upstreamCardinal && flowContext?.flowCardinal
+                ? `Downstream eddy pocket (${flowContext.upstreamCardinal} -> ${flowContext.flowCardinal} flow) behind point`
+                : 'Angled point contour deflecting current into an eddy seam',
+          },
+        ]
+      : [
+          {
+            feature: 'point',
+            observation_type: 'topographic_inference',
+            visual_cue: `Peninsula / point tip protruding into stillwater (>200° water arc, shore ~${shoreDistanceM}m ${shoreDirection} of pin)`,
+          },
+          {
+            feature: 'depth_change',
+            observation_type: 'topographic_inference',
+            visual_cue: 'Submerged point taper into deeper basin water',
+          },
+        ];
+    return {
+      kind: 'shore_point',
+      kindLabel: 'peninsula / shoreline point',
+      baseTitle: isDownstreamLee ? 'Point Downstream Eddy' : 'Peninsula Point',
+      title: isDownstreamLee ? 'Point Downstream Eddy' : 'Peninsula Point',
+      depthStructure: `Prominent point/peninsula tip (shore ~${shoreDistanceM}m ${shoreDirection} of pin)`,
+      localReliefM,
+      shoreDistanceM,
+      shoreDirection,
+      inFlowingWater,
+      isDownstreamLee,
+      features: pointFeatures,
+    };
+  }
+
+  // 3. Steep bank / drop-off along shoreline (<= 75m)
+  if (shoreDistanceM <= 75 && localReliefM > 22) {
+    return {
+      kind: 'steep_shore',
+      kindLabel: 'steep shoreline margin',
+      baseTitle: 'Steep Bank Contour',
+      title: 'Steep Bank Contour',
+      depthStructure: `Steep shoreline margin (bank ~${shoreDistanceM}m ${shoreDirection} of pin, +${localReliefM}m slope)`,
+      localReliefM,
+      shoreDistanceM,
+      shoreDirection,
+      features: [
+        { feature: 'drop_off', observation_type: 'topographic_inference', visual_cue: `Steep +${localReliefM}m bank relief ~${shoreDistanceM}m ${shoreDirection} of pin` },
+        { feature: 'depth_change', observation_type: 'topographic_inference', visual_cue: 'Shoreline contour transition inferred from bank slope' },
       ],
     };
   }
 
-  // Dynamic coordinate-seeded layout for any custom Spanish water body when offline
-  const seed = Math.abs(
-    Math.round(centerLng * 10000) + Math.round(centerLat * 10000)
-  );
-  const offset = (idx: number, range: number) =>
-    ((seed * (idx + 3) * 17) % range) - range / 2;
-
-  const rawPoints = [
-    { rank: 1, color: 'red' as const, baseX: 60 + offset(1, 28), baseY: 58 + offset(2, 26), title: 'Primary Channel Peninsula & Drop-Off', badge: '🏆 (The #1 Trophy Point)' },
-    { rank: 2, color: 'red' as const, baseX: 44 + offset(3, 28), baseY: 32 + offset(4, 24), title: 'Submerged Shoreline Shelf & Color Break', badge: '🏆 (Best Transition Line)' },
-    { rank: 3, color: 'blue' as const, baseX: 28 + offset(5, 22), baseY: 66 + offset(6, 22), title: 'Wind-Sheltered Road-Accessible Cove' },
-    { rank: 4, color: 'blue' as const, baseX: 68 + offset(7, 22), baseY: 24 + offset(8, 20), title: 'Low-Slope Gravel Access Bank' },
-    { rank: 5, color: 'orange' as const, baseX: 48 + offset(9, 26), baseY: 48 + offset(10, 24), title: 'Mid-Sector Current Narrowing & Ledge' },
-    { rank: 6, color: 'orange' as const, baseX: 54 + offset(11, 26), baseY: 78 + offset(12, 18), title: 'Southern Basin Gateway Point' },
-  ];
-
-  const dynamicSpots: GridArtifactSpot[] = rawPoints.map((pt) => {
-    const x = Number(Math.max(12, Math.min(88, pt.baseX)).toFixed(1));
-    const y = Number(Math.max(12, Math.min(88, pt.baseY)).toFixed(1));
-    const cellId = percentToCellId(x, y);
+  // 4. Sheltered Cove / Bay (land wraps >= 180° around the water point)
+  if (maxLandContigPin >= 6 && shoreDistanceM <= 75) {
     return {
-      rank: pt.rank,
-      color: pt.color,
-      cell_id: cellId,
-      grid_cells_label: `Grid ${cellId}`,
-      badge: pt.badge,
-      title: `${pt.title} (${geo.waterBodyName})`,
-      x_percent: x,
-      y_percent: y,
-      why_label:
-        pt.rank === 1
-          ? "Why it's #1:"
-          : pt.rank === 2
-            ? "Why it's incredible:"
-            : "Why it's great:",
-      why_this_spot: `Located in ${cellId} within ${geo.waterBodyName} (${geo.geographicalContext.water_elevation_m}m ASL), where shoreline bathymetry creates a prime holding edge.`,
-      secondary_label: 'Terrain & Shore Access:',
-      secondary_text: `${geo.geographicalContext.shore_accessibility_summary}. ${geo.geographicalContext.road_access_summary}`,
-      how_to_fish: `Work ${anglerGearNote || 'spinners and weedless Texas-rigged soft plastics'} across the ${cellId} structure edge.`,
+      kind: 'sheltered_cove',
+      kindLabel: 'sheltered bay / cove',
+      baseTitle: 'Sheltered Cove',
+      title: 'Sheltered Cove',
+      depthStructure: `Sheltered horseshoe bay (shore ~${shoreDistanceM}m ${shoreDirection} of pin)`,
+      localReliefM,
+      shoreDistanceM,
+      shoreDirection,
+      features: [
+        { feature: 'flat', observation_type: 'topographic_inference', visual_cue: `Protected horseshoe cove (shore ~${shoreDistanceM}m ${shoreDirection} of pin)` },
+        { feature: 'depth_change', observation_type: 'topographic_inference', visual_cue: 'Cove mouth to inner-bay depth gradient' },
+      ],
     };
-  });
+  }
 
+  // 5. Crisp > 75m offshore / open-basin boundary (never misuse 'channel' on wide open water)
+  if (shoreDistanceM > 75) {
+    return {
+      kind: 'open_basin',
+      kindLabel: 'open-basin water',
+      baseTitle: 'Mid-Basin Open Water',
+      title: 'Mid-Basin Open Water',
+      depthStructure: `Open-basin pelagic water (nearest shore ~${shoreDistanceM}m ${shoreDirection} of pin)`,
+      localReliefM,
+      shoreDistanceM,
+      shoreDirection,
+      features: [
+        { feature: 'depth_change', observation_type: 'topographic_inference', visual_cue: `Open-basin surface (~${shoreDistanceM}m off shore; bathymetry unmeasured)` },
+      ],
+    };
+  }
+
+  // 6. Bank margin (<= 75m, low-slope open bank)
   return {
-    water_body_name: geo.waterBodyName,
-    region_label: geo.regionLabel,
-    water_body_summary: `${geo.geographicalContext.scale_label} analysis for ${geo.waterBodyName} (${geo.regionLabel}) at ~${geo.geographicalContext.water_elevation_m}m ASL.`,
-    geographical_context: geo.geographicalContext,
-    restriction_check: geo.restrictionCheck,
-    recommended_spots: dynamicSpots,
-    best_game_plan: [
-      `Approach via ${geo.detectedRoads[0] || 'local perimeter road access'} and start at Spot 4 (${dynamicSpots[3].grid_cells_label}) on the gentlest walkable bank.`,
-      `Move along the shoreline contour to Spot 2 (${dynamicSpots[1].grid_cells_label}) and work the submerged shelf transition.`,
-      `Focus peak feeding hours on the primary peninsula drop-off at Spot 1 (${dynamicSpots[0].grid_cells_label}) while observing ${geo.autonomousCommunity} permit rules.`,
+    kind: 'shallow_margin',
+    kindLabel: 'shoreline margin',
+    baseTitle: 'Shoreline Margin',
+    title: 'Shoreline Margin',
+    depthStructure: `Low-slope shoreline margin (bank ~${shoreDistanceM}m ${shoreDirection} of pin)`,
+    localReliefM,
+    shoreDistanceM,
+    shoreDirection,
+    features: [
+      { feature: 'flat', observation_type: 'topographic_inference', visual_cue: `Low-slope (+${localReliefM}m) bank ~${shoreDistanceM}m ${shoreDirection} of pin` },
     ],
   };
+}
+
+export function selectDiverseSpotGeometries<
+  T extends { kind: FallbackSpotKind },
+>(items: T[], maxCount = 6): T[] {
+  const chosen: T[] = [];
+  const overflow: T[] = [];
+  let channelCount = 0;
+  let openBasinCount = 0;
+
+  for (const item of items) {
+    if (item.kind === 'channel_narrowing' && channelCount >= 2) {
+      overflow.push(item);
+      continue;
+    }
+    if (item.kind === 'open_basin' && openBasinCount >= 2) {
+      overflow.push(item);
+      continue;
+    }
+    chosen.push(item);
+    if (item.kind === 'channel_narrowing') channelCount++;
+    if (item.kind === 'open_basin') openBasinCount++;
+    if (chosen.length >= maxCount) return chosen;
+  }
+
+  for (const item of overflow) {
+    if (chosen.length >= maxCount) break;
+    chosen.push(item);
+  }
+  return chosen;
+}
+
+function selectSpeciesForSpotGeometry(
+  kind: FallbackSpotKind,
+  roster: SpeciesPresenceInfo[],
+  spotIdx: number
+): string[] {
+  if (roster.length === 0) return ['Common Carp'];
+  const preferredByKind: Record<FallbackSpotKind, RegExp[]> = {
+    shallow_margin: [/carp/i, /chub/i, /black bass/i, /tench/i, /mullet/i, /dorada/i],
+    sheltered_cove: [/carp/i, /black bass/i, /tench/i, /chub/i, /pike/i],
+    steep_shore: [/black bass/i, /brown trout/i, /zander/i, /pike/i, /dentex/i],
+    shore_point: [/black bass/i, /brown trout/i, /barbel/i, /zander/i, /sea bass/i],
+    channel_narrowing: [/brown trout/i, /barbel/i, /chub/i, /zander/i, /catfish/i],
+    offshore_transition: [/black bass/i, /brown trout/i, /barbel/i, /zander/i, /pike/i],
+    open_basin: [/zander/i, /brown trout/i, /rainbow trout/i, /black bass/i, /catfish/i, /pike/i],
+  };
+
+  const patterns = preferredByKind[kind];
+  const matched: string[] = [];
+  for (let offset = 0; offset < patterns.length; offset++) {
+    const pattern = patterns[(offset + (spotIdx % 2)) % patterns.length];
+    const hit = roster.find((sp) => pattern.test(sp.name) && !matched.includes(sp.name));
+    if (hit) matched.push(hit.name);
+    if (matched.length >= 2) break;
+  }
+
+  if (matched.length === 0) {
+    const first = roster[spotIdx % roster.length]?.name;
+    const second = roster[(spotIdx + 1) % roster.length]?.name;
+    return Array.from(new Set([first, second].filter(Boolean) as string[]));
+  }
+  return matched;
+}
+
+function buildStructureMatchedTactics(
+  kind: FallbackSpotKind,
+  targetSpecies: string[],
+  anglerGearNote?: string,
+  spotIdx = 0,
+  shoreDirection?: CardinalDirection,
+  shoreDistanceM?: number,
+  flowContext?: FlowContext,
+  isDownstreamLee = false,
+  isFlowingSpot = true
+): string {
+  const speciesText = targetSpecies.join(' / ');
+  const bankPhrase = shoreDirection ? `off the ${shoreDirection} bank` : 'along the bank';
+  const distPhrase =
+    shoreDistanceM !== undefined ? ` (~${shoreDistanceM}m out)` : '';
+  const flowPrefix =
+    flowContext?.upstreamCardinal && flowContext?.flowCardinal
+      ? `Current flows ${flowContext.upstreamCardinal} -> ${flowContext.flowCardinal}: `
+      : '';
+
+  if (anglerGearNote && anglerGearNote.trim().length > 0) {
+    const gearItems = anglerGearNote
+      .split(/[,&;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const chosenGear =
+      kind === 'shallow_margin' || kind === 'sheltered_cove'
+        ? gearItems.find((g) => /worm|craw|jig|float|corn|boilie/i.test(g)) ?? gearItems[0]
+        : kind === 'channel_narrowing' || kind === 'shore_point'
+          ? gearItems.find((g) => /spinner|spoon|minnow|jerk|shad|fly/i.test(g)) ?? gearItems[0]
+          : gearItems[(gearItems.length - 1 - (spotIdx % gearItems.length) + gearItems.length) % gearItems.length] ??
+            anglerGearNote.trim();
+
+    const zonePhrase =
+      kind === 'sheltered_cove'
+        ? `inside the sheltered cove ${bankPhrase}`
+        : kind === 'shallow_margin'
+          ? `across the ${shoreDirection || 'shoreline'} margin${distPhrase}`
+          : kind === 'open_basin'
+            ? `through open-basin water${distPhrase}`
+            : kind === 'channel_narrowing'
+              ? 'along the channel current seam'
+              : `along the ${shoreDirection || 'shoreline'} contour transition`;
+    return `Work ${chosenGear} ${zonePhrase} targeting ${speciesText}.`;
+  }
+
+  switch (kind) {
+    case 'sheltered_cove':
+      return `Quietly pitch weightless soft plastics or float-fish corn and worms ${bankPhrase}${distPhrase} with minimal surface splash.`;
+    case 'shallow_margin':
+      return spotIdx % 2 === 0
+        ? `Fish a light ledger or feeder rig with corn or boilies quietly ${bankPhrase}${distPhrase}; keep bank footsteps and noise to a minimum.`
+        : `Slow-roll a weedless soft plastic or light inline spinner parallel to the ${shoreDirection || 'shoreline'} bank${distPhrase}.`;
+    case 'channel_narrowing':
+      if (!isFlowingSpot) {
+        return spotIdx % 2 === 0
+          ? `Cast across the narrow pass from the ${shoreDirection || 'south'} bank${distPhrase} reach using a single-hook inline spinner, a slow-rolled paddle-tail shad, or a suspended float rig.`
+          : `Position on the ${shoreDirection || 'north'} bank and fan-cast suspending jerkbaits or compact jigs${distPhrase} across the mouth into the main basin transition.`;
+      }
+      if (flowPrefix) {
+        return `${flowPrefix}stand slightly upstream and quarter a single-hook spinner or small crankbait across the channel seam from the ${shoreDirection || 'shoreline'} bank.`;
+      }
+      return spotIdx % 2 === 0
+        ? `Drift or slow-retrieve a single-hook inline spinner, small crankbait, or weighted nymph along the channel seam${distPhrase}.`
+        : `Quarter suspending minnows or compact jigs across the bottleneck current edge${distPhrase}.`;
+    case 'shore_point':
+      if (flowPrefix && isDownstreamLee) {
+        return `${flowPrefix}quarter suspending minnows or spinners across the point tip and let them swing naturally into the downstream eddy pocket${distPhrase}.`;
+      }
+      return spotIdx % 2 === 0
+        ? `${flowPrefix}stand on the point tip and fan-cast suspending jerkbaits or lightly jigged soft plastics past the ${shoreDirection || 'shoreline'} tip${distPhrase}, working lures back down the underwater slope.`
+        : `${flowPrefix}cast medium-diving crankbaits or inline spinners parallel to the point's breakline${distPhrase}, retrieving along the depth transition.`;
+    case 'steep_shore':
+      return `Cast parallel to the steeper ${shoreDirection || 'shoreline'} bank edge${distPhrase} using jigged soft plastics or medium-diving lures.`;
+    case 'open_basin':
+    default:
+      return spotIdx % 2 === 0
+        ? `Fan-cast counted-down jigged shads or heavy spoons across open water${distPhrase}, counting down to mid-depth before slow-rolling.`
+        : `Cover mid-basin water${distPhrase} using slow-sinking lipless crankbaits or weighted swimbaits.`;
+  }
+}
+
+function parseSpotSlopeM(accessSummary: string): number {
+  const m = accessSummary.match(/\+(\d+)\s*m/);
+  return m ? Number(m[1]) : 999;
+}
+
+function isSpotOffshore(spot: GridArtifactSpot): boolean {
+  return (
+    spot.access_mode === 'boat_only' ||
+    /offshore|open-basin|open-water/i.test(
+      `${spot.access_summary} ${spot.depth_structure}`
+    )
+  );
+}
+
+function segmentCrossesWater(
+  a: GridArtifactSpot,
+  b: GridArtifactSpot,
+  bbox: BoundingBox,
+  waterPolygons: WaterGeometryFeature[] = [],
+  grid64Mask?: string
+): boolean {
+  if (waterPolygons.length === 0 && (!grid64Mask || grid64Mask.length !== 4096)) {
+    return false;
+  }
+  let waterHits = 0;
+  for (const t of [0.15, 0.3, 0.5, 0.7, 0.85]) {
+    const px = a.x_percent + (b.x_percent - a.x_percent) * t;
+    const py = a.y_percent + (b.y_percent - a.y_percent) * t;
+    let inWater = false;
+    if (waterPolygons.length > 0) {
+      const [lng, lat] = percentToLngLat(px, py, bbox);
+      inWater = waterPolygons.some((wp) => booleanPointInPolygon(point([lng, lat]), wp));
+    } else if (grid64Mask) {
+      inWater = isPercentOnRasterWater(grid64Mask, px, py, 0);
+    }
+    if (inWater) waterHits++;
+  }
+  return waterHits >= 1;
+}
+
+export function buildDynamicGamePlan(
+  ratedSpots: GridArtifactSpot[],
+  bbox: BoundingBox,
+  autonomousCommunity: string,
+  waterPolygons: WaterGeometryFeature[] = [],
+  grid64Mask?: string,
+  flowContext?: FlowContext
+): string[] {
+  if (ratedSpots.length === 0) return [];
+  const accessRank: Record<SpotAccessMode, number> = {
+    car_asphalt: 0,
+    dirt_track: 1,
+    hike_in: 2,
+    boat_only: 3,
+  };
+
+  const hasWatercraftSpot = ratedSpots.some(
+    (s) =>
+      s.access_mode === 'boat_only' ||
+      /watercraft|boat|float-tube|floatation/i.test(s.access_summary)
+  );
+  const rulesTail = hasWatercraftSpot
+    ? 'permits and gear/floatation rules'
+    : 'permits and seasonal gear rules';
+
+  const sortedByEase = [...ratedSpots].sort((a, b) => {
+    const offshoreDiff = Number(isSpotOffshore(a)) - Number(isSpotOffshore(b));
+    if (offshoreDiff !== 0) return offshoreDiff;
+    const easeDiff = accessRank[a.access_mode] - accessRank[b.access_mode];
+    if (easeDiff !== 0) return easeDiff;
+    const slopeDiff = parseSpotSlopeM(a.access_summary) - parseSpotSlopeM(b.access_summary);
+    if (slopeDiff !== 0) return slopeDiff;
+    return a.rank - b.rank;
+  });
+
+  const startSpot = sortedByEase[0];
+  const [startLng, startLat] = percentToLngLat(startSpot.x_percent, startSpot.y_percent, bbox);
+
+  const others = ratedSpots.filter((s) => s.rank !== startSpot.rank);
+  if (others.length === 0) {
+    return [
+      `Start at Spot ${startSpot.rank} (${startSpot.grid_cells_label}) for easiest entry — ${startSpot.access_summary}.`,
+      `Verify ${autonomousCommunity} ${rulesTail} and bank safety before casting.`,
+    ];
+  }
+
+  let bestNext = others[0];
+  let bestDistKm = Infinity;
+  let bestCrossesWater = false;
+  let bestScore = Infinity;
+
+  const startIsShore = !isSpotOffshore(startSpot) && startSpot.access_mode !== 'boat_only';
+
+  for (const cand of others) {
+    const [cLng, cLat] = percentToLngLat(cand.x_percent, cand.y_percent, bbox);
+    const dKm = turfDistance(point([startLng, startLat]), point([cLng, cLat]), {
+      units: 'kilometers',
+    });
+    const crossesWater = segmentCrossesWater(
+      startSpot,
+      cand,
+      bbox,
+      waterPolygons,
+      grid64Mask
+    );
+    const candIsShore = !isSpotOffshore(cand) && cand.access_mode !== 'boat_only';
+    // Skip trivial < 120m hops between identical-rating low-tier spots when better options exist
+    const isTrivialDuplicateHop =
+      dKm < 0.12 &&
+      Math.abs((startSpot.rating ?? 0) - (cand.rating ?? 0)) < 0.25 &&
+      others.length > 1;
+    // Prefer shore-to-shore routing before jumping to boat_only/offshore spots
+    const modalPenalty = startIsShore && !candIsShore ? 2.5 : 0;
+    const trivialPenalty = isTrivialDuplicateHop ? 3.0 : 0;
+    // On flowing rivers, prefer safe downstream-to-upstream stalking progression
+    let upstreamBonus = 0;
+    if (
+      flowContext?.isFlowingWater &&
+      flowContext.flowBearingDeg !== null &&
+      startIsShore &&
+      candIsShore
+    ) {
+      const upstreamBearing = (flowContext.flowBearingDeg + 180) % 360;
+      const moveBearing = computeCompassBearingDeg(startLng, startLat, cLng, cLat);
+      const diff = Math.abs(((moveBearing - upstreamBearing + 540) % 360) - 180);
+      if (diff <= 80) upstreamBonus = -0.35;
+    }
+    const weightedScore =
+      dKm + (crossesWater ? 0.5 : 0) + modalPenalty + trivialPenalty + upstreamBonus;
+    if (weightedScore < bestScore) {
+      bestScore = weightedScore;
+      bestDistKm = dKm;
+      bestCrossesWater = crossesWater;
+      bestNext = cand;
+    }
+  }
+
+  const distLabel =
+    bestDistKm < 1
+      ? `~${Math.round(bestDistKm * 1000)}m`
+      : `~${bestDistKm.toFixed(1)} km`;
+
+  const nextIsShore = !isSpotOffshore(bestNext) && bestNext.access_mode !== 'boat_only';
+  let step2Verb: string;
+  if (!startIsShore || !nextIsShore) {
+    step2Verb = `Reposition via perimeter road or permitted watercraft to Spot ${bestNext.rank} (${bestNext.grid_cells_label})`;
+  } else if (bestCrossesWater) {
+    step2Verb = `Follow the perimeter shoreline trail around the cove toward Spot ${bestNext.rank} (${bestNext.grid_cells_label})`;
+  } else if (bestDistKm <= 0.6) {
+    step2Verb = `Walk ${distLabel} along accessible bank paths toward Spot ${bestNext.rank} (${bestNext.grid_cells_label})`;
+  } else {
+    step2Verb = `Follow the perimeter bank tracks toward Spot ${bestNext.rank} (${bestNext.grid_cells_label})`;
+  }
+
+  const topSpot = ratedSpots[0];
+  const steps = [
+    `Start at Spot ${startSpot.rank} (${startSpot.grid_cells_label}) for easiest entry — ${startSpot.access_summary}.`,
+    `${step2Verb} (${bestNext.depth_structure.split('(')[0].trim()}).`,
+  ];
+
+  if (topSpot.rank !== startSpot.rank && topSpot.rank !== bestNext.rank) {
+    steps.push(
+      `Target peak feeding windows at highest-rated Spot 1 (${topSpot.grid_cells_label}) while observing ${autonomousCommunity} ${rulesTail}.`
+    );
+  } else {
+    steps.push(
+      `Focus peak dawn/dusk hours on Spot 1 (${topSpot.grid_cells_label}) while observing ${autonomousCommunity} ${rulesTail}.`
+    );
+  }
+
+  return steps;
 }

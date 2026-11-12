@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lago de Carucedo — Fishing Spot Guide (Interactive Online Report)</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @media print {
+      body { background: #ffffff !important; color: #0f172a !important; padding: 0 !important; }
+      .no-print { display: none !important; }
+      .print-border { border: 1px solid #cbd5e1 !important; background: #ffffff !important; color: #0f172a !important; }
+      .print-shadow-none { box-shadow: none !important; }
+      .spot-card { break-inside: avoid; page-break-inside: avoid; margin-bottom: 12px !important; }
+      .page-break { page-break-before: always; }
+    }
+    .custom-scroll::-webkit-scrollbar { width: 6px; }
+    .custom-scroll::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    .custom-scroll::-webkit-scrollbar-thumb { background: rgba(51, 65, 85, 0.8); border-radius: 4px; }
+    .active-pin { transform: scale(1.3); filter: drop-shadow(0 0 8px rgba(34, 197, 94, 0.9)); }
+    .spot-highlight { ring: 2px solid #10b981; animation: pulseGlow 1.8s ease-in-out; }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+      50% { box-shadow: 0 0 25px 4px rgba(16, 185, 129, 0.45); }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased min-h-screen selection:bg-emerald-500 selection:text-slate-950 p-3 sm:p-6 lg:p-8">
+
+  <!-- Main Container -->
+  <div class="mx-auto max-w-7xl space-y-6">
+
+    <!-- Top Navigation / Actions Bar -->
+    <header class="rounded-2xl border border-slate-800 bg-slate-900/90 backdrop-blur-xl p-5 shadow-2xl">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 font-semibold text-emerald-300">
+              <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              Hydrographic Spot Guide
+            </span>
+            <span class="rounded-md bg-slate-800 px-2.5 py-0.5 font-mono text-[11px] text-slate-300 border border-slate-700">
+              ID: FS-20261112-CARUCEDO
+            </span>
+            <span class="rounded-md bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-sky-400 border border-slate-700">
+              v0.3.1
+            </span>
+            <span class="text-slate-400">
+              El Bierzo, Castile and León, Spain
+            </span>
+          </div>
+
+          <div class="mt-2 flex flex-wrap items-baseline gap-3">
+            <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white">
+              Lago de Carucedo
+            </h1>
+            <span class="text-sm font-medium text-emerald-400">
+              • Elevation: ~392m ASL • Satellite & Terrain Spatial Grid
+            </span>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-wrap items-center gap-2.5 no-print">
+          <button
+            id="downloadPdfBtn"
+            onclick="downloadPrebuiltPdf()"
+            class="inline-flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2.5 text-xs shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            title="Download the standalone vector PDF"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            Download PDF
+          </button>
+
+          <button
+            onclick="window.print()"
+            class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-semibold px-3.5 py-2.5 text-xs transition"
+            title="Print or Save as PDF via Browser"
+          >
+            <svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+            </svg>
+            Print
+          </button>
+
+          <button
+            id="copyMdBtn"
+            onclick="copyMarkdownReport()"
+            class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-semibold px-3.5 py-2.5 text-xs transition"
+          >
+            <svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
+            </svg>
+            <span id="copyBtnText">Copy Markdown</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Water Body Overview & Fish Species -->
+      <div class="mt-5 border-t border-slate-800 pt-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <p class="text-sm text-slate-300 leading-relaxed max-w-3xl">
+            <strong class="text-emerald-400 font-semibold">Water Body Profile:</strong> A natural mountain lake featuring clean shallows, weed margins, and steep shoreline transitions.
+          </p>
+          <div class="flex items-center gap-1.5 text-xs text-slate-400 no-print">
+            <span>Filter spots:</span>
+          </div>
+        </div>
+
+        <!-- Interactive Species Filter Tags -->
+        <div class="mt-3 flex flex-wrap items-center gap-2 no-print" id="speciesFilters">
+          <button onclick="filterSpecies('all')" data-species="all" class="species-btn active rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition">
+            All Species (6 Spots)
+          </button>
+          <button onclick="filterSpecies('Brown Trout')" data-species="Brown Trout" class="species-btn rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-700 transition">
+            🐟 Brown Trout
+          </button>
+          <button onclick="filterSpecies('Black Bass')" data-species="Black Bass" class="species-btn rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-700 transition">
+            🎣 Black Bass
+          </button>
+          <button onclick="filterSpecies('Iberian Barbel & Chub')" data-species="Iberian Barbel & Chub" class="species-btn rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-700 transition">
+            🌊 Iberian Barbel & Chub
+          </button>
+          <button onclick="filterSpecies('Common Carp')" data-species="Common Carp" class="species-btn rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-700 transition">
+            🌾 Common Carp
+          </button>
+        </div>
+
+        <!-- Species Habitat Summary Cards -->
+        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+          <div class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs text-amber-300">Brown Trout</span>
+              <span class="text-[10px] text-slate-400">Cold Water</span>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-normal">Patrolling cooler, oxygenated narrows and shaded banks.</p>
+          </div>
+
+          <div class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs text-emerald-300">Black Bass</span>
+              <span class="text-[10px] text-slate-400">Ambush Predator</span>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-normal">Holding along shoreline points, coves, and transition shelves.</p>
+          </div>
+
+          <div class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs text-sky-300">Iberian Barbel & Chub</span>
+              <span class="text-[10px] text-slate-400">Native Cyprinids</span>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-normal">Cruising bottom contours, gravel drop-offs, and bank edges.</p>
+          </div>
+
+          <div class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs text-orange-300">Common Carp</span>
+              <span class="text-[10px] text-slate-400">Silt Feeder</span>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-normal">Feeding across warm, silty bay shallows and reed fringes.</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Two-Column Interactive Layout: Left Side Interactive Map + Right Side 2-Tier Spot Cards -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- LEFT COLUMN: Interactive A1-H8 Grid Map & Legal Footnote (lg:col-span-5) -->
+      <div class="lg:col-span-5 space-y-5 lg:sticky lg:top-6">
+
+        <!-- Interactive Vector Grid Map -->
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/90 backdrop-blur-xl p-4 shadow-xl space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+              <span>🗺️</span> Spatial Grid Map (A1–H8)
+            </h2>
+            <span class="text-[11px] text-emerald-400 font-mono">Interactive Pins</span>
+          </div>
+
+          <!-- SVG Simulated Hydrographic Map -->
+          <div class="relative rounded-xl border border-slate-800 bg-slate-950 overflow-hidden aspect-[4/3] flex items-center justify-center p-2">
+            <svg class="w-full h-full" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="waterGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#0e7490" />
+                  <stop offset="60%" stop-color="#0891b2" />
+                  <stop offset="100%" stop-color="#0284c7" />
+                </linearGradient>
+                <radialGradient id="deepGrad" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="#0369a1" />
+                  <stop offset="100%" stop-color="#0e7490" />
+                </radialGradient>
+              </defs>
+
+              <!-- Grid Background Lines -->
+              <!-- 8x8 Grid: width 400/8 = 50, height 300/8 = 37.5 -->
+              <!-- Columns A..H -->
+              <g stroke="#334155" stroke-width="0.75" stroke-dasharray="2,2">
+                <line x1="50" y1="0" x2="50" y2="300" />
+                <line x1="100" y1="0" x2="100" y2="300" />
+                <line x1="150" y1="0" x2="150" y2="300" />
+                <line x1="200" y1="0" x2="200" y2="300" />
+                <line x1="250" y1="0" x2="250" y2="300" />
+                <line x1="300" y1="0" x2="300" y2="300" />
+                <line x1="350" y1="0" x2="350" y2="300" />
+
+                <!-- Rows 1..8 -->
+                <line x1="0" y1="37.5" x2="400" y2="37.5" />
+                <line x1="0" y1="75.0" x2="400" y2="75.0" />
+                <line x1="0" y1="112.5" x2="400" y2="112.5" />
+                <line x1="0" y1="150.0" x2="400" y2="150.0" />
+                <line x1="0" y1="187.5" x2="400" y2="187.5" />
+                <line x1="0" y1="225.0" x2="400" y2="225.0" />
+                <line x1="0" y1="262.5" x2="400" y2="262.5" />
+              </g>
+
+              <!-- Grid Coordinate Labels -->
+              <!-- Columns A=25, B=75, C=125, D=175, E=225, F=275, G=325, H=375 -->
+              <g font-family="monospace" font-size="10" fill="#64748b" text-anchor="middle">
+                <text x="25" y="14">A</text><text x="75" y="14">B</text><text x="125" y="14">C</text><text x="175" y="14">D</text>
+                <text x="225" y="14">E</text><text x="275" y="14">F</text><text x="325" y="14">G</text><text x="375" y="14">H</text>
+
+                <text x="8" y="22" text-anchor="start">1</text>
+                <text x="8" y="60" text-anchor="start">2</text>
+                <text x="8" y="97" text-anchor="start">3</text>
+                <text x="8" y="135" text-anchor="start">4</text>
+                <text x="8" y="172" text-anchor="start">5</text>
+                <text x="8" y="210" text-anchor="start">6</text>
+                <text x="8" y="247" text-anchor="start">7</text>
+                <text x="8" y="285" text-anchor="start">8</text>
+              </g>
+
+              <!-- Water Body Outer Polygon & Shallows -->
+              <!-- Lago de Carucedo geometry: natural hourglass/basin with north arm & coves -->
+              <path d="M 60 140 
+                       C 50 100, 110 50, 170 52 
+                       C 185 52, 195 65, 185 85
+                       C 175 105, 230 115, 275 125
+                       C 320 135, 310 180, 270 205
+                       C 240 225, 210 245, 160 235
+                       C 110 225, 80 180, 60 140 Z" 
+                    fill="url(#waterGrad)" opacity="0.85" stroke="#38bdf8" stroke-width="1.5" />
+
+              <!-- Deep Core Basin Area -->
+              <path d="M 120 140 
+                       C 130 90, 180 75, 185 110 
+                       C 190 145, 250 150, 240 185 
+                       C 210 205, 150 200, 120 140 Z" 
+                    fill="url(#deepGrad)" opacity="0.65" />
+
+              <!-- Surrounding Walking Trail / Camino -->
+              <path d="M 40 135 Q 80 30 190 40 T 320 110 T 290 235 T 140 260 T 40 135" 
+                    fill="none" stroke="#eab308" stroke-width="1" stroke-dasharray="4,3" opacity="0.6" />
+
+              <!-- Compass Rose in bottom right corner -->
+              <g transform="translate(365, 265)">
+                <circle cx="0" cy="0" r="14" fill="#0f172a" stroke="#475569" stroke-width="1"/>
+                <polygon points="0,-12 3,-3 0,0 -3,-3" fill="#ef4444"/>
+                <polygon points="0,12 3,3 0,0 -3,3" fill="#94a3b8"/>
+                <text x="0" y="-14" font-size="7" font-weight="bold" fill="#f87171" text-anchor="middle">N</text>
+              </g>
+
+              <!-- SPOT PINS (Interactive) -->
+              <!-- Spot #1: D2 -> col D(175), row 2(56) -->
+              <g id="pin-1" class="cursor-pointer transition-transform" onclick="scrollToSpot(1)" onmouseenter="hoverPin(1)" onmouseleave="unhoverPin(1)">
+                <circle cx="178" cy="62" r="11" fill="#16a34a" stroke="#ffffff" stroke-width="2" class="shadow-lg"/>
+                <text x="178" y="66" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">1</text>
+                <text x="178" y="47" font-size="9" font-weight="bold" fill="#4ade80" text-anchor="middle">#1 D2</text>
+              </g>
+
+              <!-- Spot #2: C5 -> col C(125), row 5(168) -->
+              <g id="pin-2" class="cursor-pointer transition-transform" onclick="scrollToSpot(2)" onmouseenter="hoverPin(2)" onmouseleave="unhoverPin(2)">
+                <circle cx="128" cy="165" r="11" fill="#16a34a" stroke="#ffffff" stroke-width="2"/>
+                <text x="128" y="169" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">2</text>
+                <text x="128" y="150" font-size="9" font-weight="bold" fill="#4ade80" text-anchor="middle">#2 C5</text>
+              </g>
+
+              <!-- Spot #3: F4 -> col F(275), row 4(132) -->
+              <g id="pin-3" class="cursor-pointer transition-transform" onclick="scrollToSpot(3)" onmouseenter="hoverPin(3)" onmouseleave="unhoverPin(3)">
+                <circle cx="278" cy="135" r="11" fill="#16a34a" stroke="#ffffff" stroke-width="2"/>
+                <text x="278" y="139" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">3</text>
+                <text x="278" y="120" font-size="9" font-weight="bold" fill="#4ade80" text-anchor="middle">#3 F4</text>
+              </g>
+
+              <!-- Spot #4: A8 -> col A(25), row 8(280) -->
+              <g id="pin-4" class="cursor-pointer transition-transform" onclick="scrollToSpot(4)" onmouseenter="hoverPin(4)" onmouseleave="unhoverPin(4)">
+                <circle cx="45" cy="275" r="9.5" fill="#0284c7" stroke="#ffffff" stroke-width="1.5"/>
+                <text x="45" y="278.5" font-size="10" font-weight="bold" fill="#ffffff" text-anchor="middle">4</text>
+                <text x="45" y="262" font-size="8.5" font-weight="bold" fill="#38bdf8" text-anchor="middle">#4 A8</text>
+              </g>
+
+              <!-- Spot #5: E7 -> col E(225), row 7(243) -->
+              <g id="pin-5" class="cursor-pointer transition-transform" onclick="scrollToSpot(5)" onmouseenter="hoverPin(5)" onmouseleave="unhoverPin(5)">
+                <circle cx="232" cy="235" r="9.5" fill="#0284c7" stroke="#ffffff" stroke-width="1.5"/>
+                <text x="232" y="238.5" font-size="10" font-weight="bold" fill="#ffffff" text-anchor="middle">5</text>
+                <text x="232" y="222" font-size="8.5" font-weight="bold" fill="#38bdf8" text-anchor="middle">#5 E7</text>
+              </g>
+
+              <!-- Spot #6: A4 -> col A(25), row 4(132) -->
+              <g id="pin-6" class="cursor-pointer transition-transform" onclick="scrollToSpot(6)" onmouseenter="hoverPin(6)" onmouseleave="unhoverPin(6)">
+                <circle cx="40" cy="135" r="9.5" fill="#0284c7" stroke="#ffffff" stroke-width="1.5"/>
+                <text x="40" y="138.5" font-size="10" font-weight="bold" fill="#ffffff" text-anchor="middle">6</text>
+                <text x="40" y="122" font-size="8.5" font-weight="bold" fill="#38bdf8" text-anchor="middle">#6 A4</text>
+              </g>
+            </svg>
+          </div>
+
+          <!-- Map Legend -->
+          <div class="flex flex-wrap items-center justify-between text-xs text-slate-300 gap-2 border-t border-slate-800/80 pt-2">
+            <div class="flex items-center gap-3">
+              <span class="inline-flex items-center gap-1.5">
+                <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                <strong class="text-emerald-400 font-semibold">1–3:</strong> Top Picks
+              </span>
+              <span class="inline-flex items-center gap-1.5">
+                <span class="h-2.5 w-2.5 rounded-full bg-sky-500"></span>
+                <strong class="text-sky-400 font-semibold">4–6:</strong> Secondary
+              </span>
+            </div>
+            <span class="text-[11px] text-amber-400/90 font-mono">
+              - - - Camino Perimeter Path
+            </span>
+          </div>
+        </div>
+
+        <!-- Regulations & Terrain Note Box (Single Clean Global Note) -->
+        <div class="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 space-y-2.5 shadow-lg">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+              <span>📋</span> Regulations & Terrain Note
+            </h3>
+            <span class="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-200">
+              Castilla y León
+            </span>
+          </div>
+
+          <ul class="space-y-2 text-xs leading-relaxed text-slate-200">
+            <li class="flex items-start gap-2">
+              <span class="text-amber-400 font-bold">•</span>
+              <div>
+                <strong class="text-white">Permits:</strong> Requires the free <em>Licencia de Pesca de Castilla y León</em> (or Spanish Interautonómica). Free <em>Tramo Libre</em> angling rules apply unless signposted locally as an AREC / Coto.
+              </div>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-amber-400 font-bold">•</span>
+              <div>
+                <strong class="text-white">Safety & Buffers:</strong> Maintain mandatory safety buffers from dams, weirs, and marked waterfowl sanctuaries.
+              </div>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-amber-400 font-bold">•</span>
+              <div>
+                <strong class="text-white">Data Note:</strong> Underwater contours are inferred from satellite shoreline topography and elevation models. Always verify local bank footing and seasonal weed growth on arrival.
+              </div>
+            </li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN: 2-Tier Spot Cards & Game Plan (lg:col-span-7) -->
+      <div class="lg:col-span-7 space-y-6">
+
+        <!-- ==================== TIER 1: TOP RECOMMENDED SPOTS (#1–#3) ==================== -->
+        <section class="space-y-3.5">
+          <div class="flex items-center justify-between border-b border-emerald-500/30 pb-2">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">🏆</span>
+              <h2 class="text-base font-extrabold tracking-tight text-white">
+                Top Recommended Spots (#1–#3)
+              </h2>
+            </div>
+            <span class="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-xs font-bold text-emerald-300">
+              High-Percentage Ambush Zones
+            </span>
+          </div>
+
+          <!-- Spot #1 -->
+          <article
+            id="spot-1"
+            data-spot-species="Brown Trout, Iberian Barbel"
+            class="spot-card group rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-slate-900 to-slate-950 p-5 shadow-xl transition-all duration-200 hover:border-emerald-400 hover:shadow-emerald-500/10 space-y-3"
+          >
+            <!-- Card Header -->
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 text-slate-950 px-2.5 py-0.5 font-mono text-xs font-black shadow-sm">
+                  #1 Top Pick
+                </span>
+                <span class="rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs font-bold text-sky-300">
+                  Grid D2
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-xs font-bold text-amber-300">
+                  ⭐ 3.9/10
+                </span>
+                <h3 class="text-base font-bold text-white tracking-tight">
+                  North Constriction Neck
+                </h3>
+              </div>
+
+              <!-- Target Species Badge upfront in Header Line -->
+              <div class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2.5 py-1 text-xs font-medium text-emerald-300">
+                <span class="text-slate-400">Target:</span>
+                <span class="font-bold text-emerald-200">Brown Trout, Iberian Barbel</span>
+              </div>
+            </div>
+
+            <!-- Why This Spot Narrative -->
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              <strong class="text-emerald-400 font-semibold">Why this spot:</strong> The lake narrows here into a natural pinch-point between the northern arm and the main basin. Cruising trout and barbel funnel through this bottleneck as water and forage move between basins, creating the highest-percentage ambush corridor on the lake.
+            </p>
+
+            <!-- Two Punchy Bullets -->
+            <div class="grid grid-cols-1 gap-2 pt-1">
+              <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3 space-y-0.5">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-300">
+                  <span>🎯</span> Tactics & Cast:
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Fan-cast a single-hook inline spinner, drift a light float rig, or slow-roll a small soft plastic ~10m out across the narrowest channel cut.
+                </p>
+              </div>
+
+              <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3 space-y-0.5">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-sky-300">
+                  <span>🚶</span> Shore Access:
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Gentle bank (~2m slope) reachable via clear shoreline walking paths off the north perimeter.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <!-- Spot #2 -->
+          <article
+            id="spot-2"
+            data-spot-species="Black Bass, Brown Trout"
+            class="spot-card group rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-slate-900 to-slate-950 p-5 shadow-xl transition-all duration-200 hover:border-emerald-400 hover:shadow-emerald-500/10 space-y-3"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 text-slate-950 px-2.5 py-0.5 font-mono text-xs font-black shadow-sm">
+                  #2 Top Pick
+                </span>
+                <span class="rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs font-bold text-sky-300">
+                  Grid C5
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-xs font-bold text-amber-300">
+                  ⭐ 3.9/10
+                </span>
+                <h3 class="text-base font-bold text-white tracking-tight">
+                  West Peninsula Point
+                </h3>
+              </div>
+
+              <div class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2.5 py-1 text-xs font-medium text-emerald-300">
+                <span class="text-slate-400">Target:</span>
+                <span class="font-bold text-emerald-200">Black Bass, Brown Trout</span>
+              </div>
+            </div>
+
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              <strong class="text-emerald-400 font-semibold">Why this spot:</strong> A prominent point jutting out into open water breaks the lake's contour line. Predatory bass and trout use this structure to corral passing schools of baitfish against the shore, giving you a 180° casting arc into multiple depth zones from one standing position.
+            </p>
+
+            <div class="grid grid-cols-1 gap-2 pt-1">
+              <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3 space-y-0.5">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-300">
+                  <span>🎯</span> Tactics & Cast:
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Stand on the point and cast suspending jerkbaits or lightly jigged soft plastics ~14m past the tip, working lures back down the underwater slope.
+                </p>
+              </div>
+
+              <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3 space-y-0.5">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-sky-300">
+                  <span>🚶</span> Shore Access:
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Flat, accessible bank (~2m slope) with easy trail access from Camino a La Barosa.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <!-- Spot #3 -->
+          <article
+            id="spot-3"
+            data-spot-species="Black Bass, Iberian Chub"
+            class="spot-card group rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-slate-900 to-slate-950 p-5 shadow-xl transition-all duration-200 hover:border-emerald-400 hover:shadow-emerald-500/10 space-y-3"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 text-slate-950 px-2.5 py-0.5 font-mono text-xs font-black shadow-sm">
+                  #3 Top Pick
+                </span>
+                <span class="rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs font-bold text-sky-300">
+                  Grid F4
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-xs font-bold text-amber-300">
+                  ⭐ 3.5/10
+                </span>
+                <h3 class="text-base font-bold text-white tracking-tight">
+                  East Sheltered Cove
+                </h3>
+              </div>
+
+              <div class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2.5 py-1 text-xs font-medium text-emerald-300">
+                <span class="text-slate-400">Target:</span>
+                <span class="font-bold text-emerald-200">Black Bass, Iberian Chub</span>
+              </div>
+            </div>
+
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              <strong class="text-emerald-400 font-semibold">Why this spot:</strong> Tucked into the eastern shoreline, this cove is completely shielded from main-lake chop and wind. The warmer, calm water provides safe haven for fry and terrestrial insects, drawing active bass and chub into the shallows during midday feeding windows.
+            </p>
+
+            <div class="grid grid-cols-1 gap-2 pt-1">
+              <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3 space-y-0.5">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-300">
+                  <span>🎯</span> Tactics & Cast:
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Quietly pitch weightless soft plastic worms or float-fish corn and worms ~10m into the calm cove pockets with minimal surface splash.
+                </p>
+              </div>
+
+              <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3 space-y-0.5">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-sky-300">
+                  <span>🚶</span> Shore Access:
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Easy, flat grassy approach (~2m slope) with open casting room.
+                </p>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <!-- ==================== TIER 2: SECONDARY & SHORELINE SPOTS (#4–#6) ==================== -->
+        <section class="space-y-3.5 pt-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">📍</span>
+              <h2 class="text-base font-extrabold tracking-tight text-slate-200">
+                Secondary & Shoreline Spots (#4–#6)
+              </h2>
+            </div>
+            <span class="rounded-full bg-slate-800 border border-slate-700 px-2.5 py-0.5 text-xs font-medium text-slate-400">
+              Low-Light Roamers & Easy Access
+            </span>
+          </div>
+
+          <!-- Spot #4 -->
+          <article
+            id="spot-4"
+            data-spot-species="Iberian Chub, Black Bass"
+            class="spot-card group rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg transition-all duration-200 hover:border-slate-700 space-y-2.5"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 rounded-lg bg-sky-500/20 border border-sky-500/40 text-sky-300 px-2.5 py-0.5 font-mono text-xs font-bold">
+                  #4 Secondary
+                </span>
+                <span class="rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs font-bold text-slate-300">
+                  Grid A8
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs font-bold text-amber-300/90">
+                  ⭐ 2.1/10
+                </span>
+                <h3 class="text-sm font-bold text-white tracking-tight">
+                  North Shore Margin
+                </h3>
+              </div>
+
+              <div class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-0.5 text-xs font-medium text-slate-300">
+                <span class="text-slate-400">Target:</span>
+                <span class="font-semibold text-slate-200">Iberian Chub, Black Bass</span>
+              </div>
+            </div>
+
+            <p class="text-xs text-slate-300 leading-relaxed">
+              <strong class="text-slate-200 font-semibold">Why this spot:</strong> An open, gradual shoreline flat. While lacking dramatic underwater drops, roaming chub and cruising bass cruise parallel to the bank during dawn and dusk low-light hours.
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-xs">
+              <div class="rounded-lg border border-slate-800/80 bg-slate-950/60 p-2.5 space-y-0.5">
+                <div class="font-bold text-slate-300 flex items-center gap-1">
+                  <span>🎯</span> Tactics & Cast:
+                </div>
+                <p class="text-slate-400 text-[11px] leading-relaxed">
+                  Walk the bank and slow-roll a light inline spinner or weedless paddle-tail ~14m out, retrieving parallel to the shoreline.
+                </p>
+              </div>
+
+              <div class="rounded-lg border border-slate-800/80 bg-slate-950/60 p-2.5 space-y-0.5">
+                <div class="font-bold text-slate-300 flex items-center gap-1">
+                  <span>🚶</span> Shore Access:
+                </div>
+                <p class="text-slate-400 text-[11px] leading-relaxed">
+                  Gentle bank (~5m slope) with an unobstructed shoreline trail.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <!-- Spot #5 -->
+          <article
+            id="spot-5"
+            data-spot-species="Common Carp, Iberian Chub"
+            class="spot-card group rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg transition-all duration-200 hover:border-slate-700 space-y-2.5"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 rounded-lg bg-sky-500/20 border border-sky-500/40 text-sky-300 px-2.5 py-0.5 font-mono text-xs font-bold">
+                  #5 Secondary
+                </span>
+                <span class="rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs font-bold text-slate-300">
+                  Grid E7
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs font-bold text-amber-300/90">
+                  ⭐ 2.1/10
+                </span>
+                <h3 class="text-sm font-bold text-white tracking-tight">
+                  Southeast Silt Bay
+                </h3>
+              </div>
+
+              <div class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-0.5 text-xs font-medium text-slate-300">
+                <span class="text-slate-400">Target:</span>
+                <span class="font-semibold text-slate-200">Common Carp, Iberian Chub</span>
+              </div>
+            </div>
+
+            <p class="text-xs text-slate-300 leading-relaxed">
+              <strong class="text-slate-200 font-semibold">Why this spot:</strong> A quiet, silt-bottom shoreline pocket along the southeastern bend. Ideal territory for bottom-feeding carp rooting in the silt and chub cruising the margins.
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-xs">
+              <div class="rounded-lg border border-slate-800/80 bg-slate-950/60 p-2.5 space-y-0.5">
+                <div class="font-bold text-slate-300 flex items-center gap-1">
+                  <span>🎯</span> Tactics & Cast:
+                </div>
+                <p class="text-slate-400 text-[11px] leading-relaxed">
+                  Cast a light feeder or ledger rig with corn or boilies ~10m off the bank; keep bank footsteps and noise to a minimum.
+                </p>
+              </div>
+
+              <div class="rounded-lg border border-slate-800/80 bg-slate-950/60 p-2.5 space-y-0.5">
+                <div class="font-bold text-slate-300 flex items-center gap-1">
+                  <span>🚶</span> Shore Access:
+                </div>
+                <p class="text-slate-400 text-[11px] leading-relaxed">
+                  Low, level bank (~2m slope) with clear space for bank sticks or a seat box.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <!-- Spot #6 -->
+          <article
+            id="spot-6"
+            data-spot-species="Iberian Chub, Black Bass"
+            class="spot-card group rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg transition-all duration-200 hover:border-slate-700 space-y-2.5"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 rounded-lg bg-sky-500/20 border border-sky-500/40 text-sky-300 px-2.5 py-0.5 font-mono text-xs font-bold">
+                  #6 Secondary
+                </span>
+                <span class="rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs font-bold text-slate-300">
+                  Grid A4
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs font-bold text-amber-300/90">
+                  ⭐ 2.1/10
+                </span>
+                <h3 class="text-sm font-bold text-white tracking-tight">
+                  Southwest Entry Bank
+                </h3>
+              </div>
+
+              <div class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-0.5 text-xs font-medium text-slate-300">
+                <span class="text-slate-400">Target:</span>
+                <span class="font-semibold text-slate-200">Iberian Chub, Black Bass</span>
+              </div>
+            </div>
+
+            <p class="text-xs text-slate-300 leading-relaxed">
+              <strong class="text-slate-200 font-semibold">Why this spot:</strong> An expansive, shallow bank offering the gentlest slope and fastest access from the road. Perfect for making a few exploratory casts upon arrival before trekking further.
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-xs">
+              <div class="rounded-lg border border-slate-800/80 bg-slate-950/60 p-2.5 space-y-0.5">
+                <div class="font-bold text-slate-300 flex items-center gap-1">
+                  <span>🎯</span> Tactics & Cast:
+                </div>
+                <p class="text-slate-400 text-[11px] leading-relaxed">
+                  Fan-cast small shallow crankbaits or spinners across the open shallows (~28m out) to prospect for active cruisers.
+                </p>
+              </div>
+
+              <div class="rounded-lg border border-slate-800/80 bg-slate-950/60 p-2.5 space-y-0.5">
+                <div class="font-bold text-slate-300 flex items-center gap-1">
+                  <span>🚶</span> Shore Access:
+                </div>
+                <p class="text-slate-400 text-[11px] leading-relaxed">
+                  Easiest entry on the lake (~1m slope); immediate access from the roadside verge.
+                </p>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <!-- ==================== SUGGESTED GAME PLAN ==================== -->
+        <section class="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-5 shadow-xl space-y-4">
+          <div class="flex items-center justify-between border-b border-emerald-500/30 pb-3">
+            <h3 class="text-base font-bold text-emerald-300 flex items-center gap-2">
+              <span>🧭</span> Suggested Game Plan for Lago de Carucedo
+            </h3>
+            <span class="text-xs text-emerald-400 font-mono">3 Strategic Phases</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <!-- Phase 1 -->
+            <div class="rounded-xl border border-slate-800 bg-slate-900/90 p-3.5 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] font-bold text-sky-300">Phase 1</span>
+                <span class="text-[11px] text-slate-400">07:00 – 08:00</span>
+              </div>
+              <h4 class="text-xs font-bold text-white">Arrival & Warm-up</h4>
+              <p class="text-[11px] text-slate-300 leading-relaxed">
+                Step onto the bank at <strong class="text-emerald-300 font-semibold">Spot 6 (Grid A4)</strong> for quick warm-up casts to check water clarity and surface activity.
+              </p>
+            </div>
+
+            <!-- Phase 2 -->
+            <div class="rounded-xl border border-emerald-500/40 bg-slate-900/90 p-3.5 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="rounded bg-emerald-500/20 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-300">Phase 2</span>
+                <span class="text-[11px] text-emerald-400 font-semibold">08:30 – 11:30</span>
+              </div>
+              <h4 class="text-xs font-bold text-white">Prime Feeding Window</h4>
+              <p class="text-[11px] text-slate-300 leading-relaxed">
+                Walk north to <strong class="text-emerald-300 font-semibold">Spot 1 (North Constriction Neck, D2)</strong> for trout & barbel, then work to <strong class="text-emerald-300 font-semibold">West Peninsula Point (Spot 2, C5)</strong>.
+              </p>
+            </div>
+
+            <!-- Phase 3 -->
+            <div class="rounded-xl border border-slate-800 bg-slate-900/90 p-3.5 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] font-bold text-amber-300">Phase 3</span>
+                <span class="text-[11px] text-slate-400">12:00 – 15:00</span>
+              </div>
+              <h4 class="text-xs font-bold text-white">Midday / Rising Wind</h4>
+              <p class="text-[11px] text-slate-300 leading-relaxed">
+                If afternoon winds create chop on the main lake, head to <strong class="text-emerald-300 font-semibold">East Sheltered Cove (Spot 3, F4)</strong> for calm, warm pockets for bass and chub.
+              </p>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 pt-4 pb-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+      <div>
+        Fishing Spot • Spec-Driven Development ($0 MVP Architecture)
+      </div>
+      <div>
+        Clean Synthesized Version • Single Page Ready • No Redundant Warnings
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none rounded-xl border border-emerald-500/40 bg-slate-900 px-4 py-2.5 text-xs font-semibold text-emerald-300 shadow-2xl flex items-center gap-2">
+    <span>✓</span> <span id="toastMsg">Action complete</span>
+  </div>
+
+  <script>
+    // Embedded PDF Base64
+    const PDF_BASE64 = "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IC9XaW5BbnNpRW5jb2RpbmcKL0ZpcnN0Q2hhciAzMgovTGFzdENoYXIgMjU1Cj4+CmVuZG9iago4IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGRPYmxpcXVlCi9TdWJ0eXBlIC9UeXBlMQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovRmlyc3RDaGFyIDMyCi9MYXN0Q2hhciAyNTUKPj4KZW5kb2JqCjkgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL0Jhc2VGb250IC9Db3VyaWVyCi9TdWJ0eXBlIC9UeXBlMQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovRmlyc3RDaGFyIDMyCi9MYXN0Q2hhciAyNTUKPj4KZW5kb2JqCjEwIDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9CYXNlRm9udCAvQ291cmllci1Cb2xkCi9TdWJ0eXBlIC9UeXBlMQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovRmlyc3RDaGFyIDMyCi9MYXN0Q2hhciAyNTUKPj4KZW5kb2JqCjExIDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9CYXNlRm9udCAvQ291cmllci1PYmxpcXVlCi9TdWJ0eXBlIC9UeXBlMQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovRmlyc3RDaGFyIDMyCi9MYXN0Q2hhciAyNTUKPj4KZW5kb2JqCjEyIDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9CYXNlRm9udCAvQ291cmllci1Cb2xkT2JsaXF1ZQovU3VidHlwZSAvVHlwZTEKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL0ZpcnN0Q2hhciAzMgovTGFzdENoYXIgMjU1Cj4+CmVuZG9iagoxMyAwIG9iago8PAovVHlwZSAvRm9udAovQmFzZUZvbnQgL1RpbWVzLVJvbWFuCi9TdWJ0eXBlIC9UeXBlMQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovRmlyc3RDaGFyIDMyCi9MYXN0Q2hhciAyNTUKPj4KZW5kb2JqCjE0IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9CYXNlRm9udCAvVGltZXMtQm9sZAovU3VidHlwZSAvVHlwZTEKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL0ZpcnN0Q2hhciAzMgovTGFzdENoYXIgMjU1Cj4+CmVuZG9iagoxNSAwIG9iago8PAovVHlwZSAvRm9udAovQmFzZUZvbnQgL1RpbWVzLUl0YWxpYwovU3VidHlwZSAvVHlwZTEKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL0ZpcnN0Q2hhciAzMgovTGFzdENoYXIgMjU1Cj4+CmVuZG9iagoxNiAwIG9iago8PAovVHlwZSAvRm9udAovQmFzZUZvbnQgL1RpbWVzLUJvbGRJdGFsaWMKL1N1YnR5cGUgL1R5cGUxCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9GaXJzdENoYXIgMzIKL0xhc3RDaGFyIDI1NQo+PgplbmRvYmoKMTcgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL0Jhc2VGb250IC9aYXBmRGluZ2JhdHMKL1N1YnR5cGUgL1R5cGUxCi9GaXJzdENoYXIgMzIKL0xhc3RDaGFyIDI1NQo+PgplbmRvYmoKMTggMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL0Jhc2VGb250IC9TeW1ib2wKL1N1YnR5cGUgL1R5cGUxCi9GaXJzdENoYXIgMzIKL0xhc3RDaGFyIDI1NQo+PgplbmRvYmoKMiAwIG9iago8PAovUHJvY1NldCBbL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSV0KL0ZvbnQgPDwKL0YxIDUgMCBSCi9GMiA2IDAgUgovRjMgNyAwIFIKL0Y0IDggMCBSCi9GNSA5IDAgUgovRjYgMTAgMCBSCi9GNyAxMSAwIFIKL0Y4IDEyIDAgUgovRjkgMTMgMCBSCi9GMTAgMTQgMCBSCi9GMTEgMTUgMCBSCi9GMTIgMTYgMCBSCi9GMTMgMTcgMCBSCi9GMTQgMTggMCBSCj4+Ci9YT2JqZWN0IDw8Cj4+Cj4+CmVuZG9iagoxOSAwIG9iago8PAovUHJvZHVjZXIgKGpzUERGIDQuMi4xKQovQ3JlYXRpb25EYXRlIChEOjIwMjYxMTEyMTU1ODQzKzAxJzAwJykKPj4KZW5kb2JqCjIwIDAgb2JqCjw8Ci9UeXBlIC9DYXRhbG9nCi9QYWdlcyAxIDAgUgovT3BlbkFjdGlvbiBbMyAwIFIgL0ZpdEggbnVsbF0KL1BhZ2VMYXlvdXQgL09uZUNvbHVtbgo+PgplbmRvYmoKeHJlZgowIDIxCjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwODYxMSAwMDAwMCBuIAowMDAwMDEwNDI4IDAwMDAwIG4gCjAwMDAwMDAwMTUgMDAwMDAgbiAKMDAwMDAwMDE1MiAwMDAwMCBuIAowMDAwMDA4NjY4IDAwMDAwIG4gCjAwMDAwMDg3OTMgMDAwMDAgbiAKMDAwMDAwODkyMyAwMDAwMCBuIAowMDAwMDA5MDU2IDAwMDAwIG4gCjAwMDAwMDkxOTMgMDAwMDAgbiAKMDAwMDAwOTMxNiAwMDAwMCBuIAowMDAwMDA5NDQ1IDAwMDAwIG4gCjAwMDAwMDk1NzcgMDAwMDAgbiAKMDAwMDAwOTcxMyAwMDAwMCBuIAowMDAwMDA5ODQxIDAwMDAwIG4gCjAwMDAwMDk5NjggMDAwMDAgbiAKMDAwMDAxMDA5NyAwMDAwMCBuIAowMDAwMDEwMjMwIDAwMDAwIG4gCjAwMDAwMTAzMzIgMDAwMDAgbiAKMDAwMDAxMDY3NiAwMDAwMCBuIAowMDAwMDEwNzYyIDAwMDAwIG4gCnRyYWlsZXIKPDwKL1NpemUgMjEKL1Jvb3QgMjAgMCBSCi9JbmZvIDE5IDAgUgovSUQgWyA8RkU3M0MzNzNGNTFENUMwNzU5MEE2N0JCNDIzRjM3RTM+IDxGRTczQzM3M0Y1MUQ1QzA3NTkwQTY3QkI0MjNGMzdFMz4gXQo+PgpzdGFydHhyZWYKMTA4NjYKJSVFT0Y=";
+    const MARKDOWN_TEXT = "# Lago de Carucedo — Fishing Spot Guide\nEl Bierzo, Castile and León, Spain  •  Elevation: ~392m ASL  •  Satellite & Terrain Analysis\n\n---\n\n### Water Body Overview & Fish Species\nA natural mountain lake featuring clean shallows, weed margins, and steep shoreline transitions.\n* **Brown Trout:** Patrolling cooler, oxygenated narrows and shaded banks.\n* **Black Bass:** Holding along shoreline points, coves, and shallow transition shelves.\n* **Iberian Barbel & Chub:** Cruising bottom contours, gravel drop-offs, and overhanging bank edges.\n* **Common Carp:** Feeding across warm, silty bay shallows and reed fringes.\n\n---\n\n### 🏆 Top Recommended Spots\n\n#### #1. North Constriction Neck [Grid D2]  •  ⭐ 3.9/10  •  Target: Brown Trout, Iberian Barbel\n**Why this spot:** The lake narrows here into a natural pinch-point between the northern arm and the main basin. Cruising trout and barbel funnel through this bottleneck as water and forage move between basins, creating the highest-percentage ambush corridor on the lake.\n* **Tactics & Cast:** Fan-cast a single-hook inline spinner, drift a light float rig, or slow-roll a small soft plastic ~10m out across the narrowest channel cut.\n* **Shore Access:** Gentle bank (~2m slope) reachable via clear shoreline walking paths off the north perimeter.\n\n---\n\n#### #2. West Peninsula Point [Grid C5]  •  ⭐ 3.9/10  •  Target: Black Bass, Brown Trout\n**Why this spot:** A prominent point jutting out into open water breaks the lake's contour line. Predatory bass and trout use this structure to corral passing schools of baitfish against the shore, giving you a 180° casting arc into multiple depth zones from one standing position.\n* **Tactics & Cast:** Stand on the point and cast suspending jerkbaits or lightly jigged soft plastics ~14m past the tip, working lures back down the underwater slope.\n* **Shore Access:** Flat, accessible bank (~2m slope) with easy trail access from Camino a La Barosa.\n\n---\n\n#### #3. East Sheltered Cove [Grid F4]  •  ⭐ 3.5/10  •  Target: Black Bass, Iberian Chub\n**Why this spot:** Tucked into the eastern shoreline, this cove is completely shielded from main-lake chop and wind. The warmer, calm water provides safe haven for fry and terrestrial insects, drawing active bass and chub into the shallows during midday feeding windows.\n* **Tactics & Cast:** Quietly pitch weightless soft plastic worms or float-fish corn and worms ~10m into the calm cove pockets with minimal surface splash.\n* **Shore Access:** Easy, flat grassy approach (~2m slope) with open casting room.\n\n---\n\n### 📍 Secondary & Shoreline Spots\n\n#### #4. North Shore Margin [Grid A8]  •  ⭐ 2.1/10  •  Target: Iberian Chub, Black Bass\n**Why this spot:** An open, gradual shoreline flat. While lacking dramatic underwater drops, roaming chub and cruising bass cruise parallel to the bank during dawn and dusk low-light hours.\n* **Tactics & Cast:** Walk the bank and slow-roll a light inline spinner or weedless paddle-tail ~14m out, retrieving parallel to the shoreline.\n* **Shore Access:** Gentle bank (~5m slope) with an unobstructed shoreline trail.\n\n---\n\n#### #5. Southeast Silt Bay [Grid E7]  •  ⭐ 2.1/10  •  Target: Common Carp, Iberian Chub\n**Why this spot:** A quiet, silt-bottom shoreline pocket along the southeastern bend. Ideal territory for bottom-feeding carp rooting in the silt and chub cruising the margins.\n* **Tactics & Cast:** Cast a light feeder or ledger rig with corn or boilies ~10m off the bank; keep bank footsteps and noise to a minimum.\n* **Shore Access:** Low, level bank (~2m slope) with clear space for bank sticks or a seat box.\n\n---\n\n#### #6. Southwest Entry Bank [Grid A4]  •  ⭐ 2.1/10  •  Target: Iberian Chub, Black Bass\n**Why this spot:** An expansive, shallow bank offering the gentlest slope and fastest access from the road. Perfect for making a few exploratory casts upon arrival before trekking further.\n* **Tactics & Cast:** Fan-cast small shallow crankbaits or spinners across the open shallows (~28m out) to prospect for active cruisers.\n* **Shore Access:** Easiest entry on the lake (~1m slope); immediate access from the roadside verge.\n\n---\n\n### 🧭 Suggested Game Plan\n1. **Arrival & Quick Prospecting:** Step onto the bank at **Spot 6 (Grid A4)** for quick warm-up casts to check water clarity and surface activity.\n2. **Prime Morning Feeding Window:** Walk the north path to **Spot 1 (North Constriction Neck, Grid D2)** to target transitioning trout and barbel, then work your way to the **West Peninsula Point (Spot 2, Grid C5)**.\n3. **Midday / Rising Wind:** If afternoon winds create chop on the main lake, head to the **East Sheltered Cove (Spot 3, Grid F4)** to fish calm, warm pockets for bass and chub.\n\n---\n\n### 📋 Regulations & Terrain Note\n* **Permits:** Requires the free *Licencia de Pesca de Castilla y León* (or Spanish Interautonómica). Free *Tramo Libre* angling rules apply unless signposted locally as an AREC / Coto.\n* **Safety & Buffers:** Maintain mandatory safety buffers from dams, weirs, and marked waterfowl sanctuaries.\n* **Data Note:** Underwater contours are inferred from satellite shoreline topography and elevation models. Always verify local bank footing and seasonal weed growth on arrival.";
+
+    function downloadPrebuiltPdf() {
+      try {
+        const byteCharacters = atob(PDF_BASE64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'lago-de-carucedo-fishing-guide.pdf';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('PDF downloaded successfully!');
+      } catch (e) {
+        window.open('/lago-de-carucedo-fishing-guide.pdf', '_blank');
+      }
+    }
+
+    function copyMarkdownReport() {
+      navigator.clipboard.writeText(MARKDOWN_TEXT).then(() => {
+        showToast('Full Markdown report copied to clipboard!');
+        const btn = document.getElementById('copyBtnText');
+        if (btn) {
+          btn.innerText = 'Copied!';
+          setTimeout(() => { btn.innerText = 'Copy Markdown'; }, 2000);
+        }
+      });
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      if (toast && toastMsg) {
+        toastMsg.innerText = msg;
+        toast.classList.remove('translate-y-20', 'opacity-0');
+        setTimeout(() => {
+          toast.classList.add('translate-y-20', 'opacity-0');
+        }, 2500);
+      }
+    }
+
+    function scrollToSpot(rank) {
+      const el = document.getElementById('spot-' + rank);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('spot-highlight');
+        setTimeout(() => { el.classList.remove('spot-highlight'); }, 2200);
+      }
+    }
+
+    function hoverPin(rank) {
+      const pin = document.getElementById('pin-' + rank);
+      if (pin) pin.classList.add('active-pin');
+    }
+
+    function unhoverPin(rank) {
+      const pin = document.getElementById('pin-' + rank);
+      if (pin) pin.classList.remove('active-pin');
+    }
+
+    function filterSpecies(target) {
+      const cards = document.querySelectorAll('.spot-card');
+      const buttons = document.querySelectorAll('.species-btn');
+
+      buttons.forEach(btn => {
+        if (btn.getAttribute('data-species') === target) {
+          btn.className = 'species-btn active rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition';
+        } else {
+          btn.className = 'species-btn rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-700 transition';
+        }
+      });
+
+      cards.forEach(card => {
+        if (target === 'all') {
+          card.style.opacity = '1';
+          card.style.transform = 'scale(1)';
+        } else {
+          const speciesList = card.getAttribute('data-spot-species') || '';
+          if (speciesList.includes(target) || (target === 'Iberian Barbel & Chub' && (speciesList.includes('Barbel') || speciesList.includes('Chub')))) {
+            card.style.opacity = '1';
+            card.style.transform = 'scale(1.01)';
+          } else {
+            card.style.opacity = '0.35';
+            card.style.transform = 'scale(0.99)';
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>

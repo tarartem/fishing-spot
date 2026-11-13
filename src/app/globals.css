@@ -43,3 +43,75 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #3d4f40;
 }
+
+/* Tactical Angler Verhunt Field Palette — MapLibre Navigation & Zoom Controls */
+.maplibregl-ctrl-bottom-right {
+  margin-bottom: 12px !important;
+  margin-right: 12px !important;
+}
+
+.maplibregl-ctrl-group {
+  background-color: rgba(21, 28, 22, 0.95) !important;
+  border: 1px solid #2c3a2f !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 25px -5px rgba(10, 15, 11, 0.6), 0 0 0 1px rgba(44, 58, 47, 0.4) !important;
+  backdrop-filter: blur(8px) !important;
+  overflow: hidden !important;
+}
+
+.maplibregl-ctrl-group:not(:empty) {
+  box-shadow: 0 10px 25px -5px rgba(10, 15, 11, 0.6), 0 0 0 1px rgba(44, 58, 47, 0.4) !important;
+}
+
+.maplibregl-ctrl-group button {
+  background-color: transparent !important;
+  width: 32px !important;
+  height: 32px !important;
+  transition: background-color 0.15s ease, opacity 0.15s ease !important;
+}
+
+.maplibregl-ctrl-group button+button {
+  border-top: 1px solid #2c3a2f !important;
+}
+
+.maplibregl-ctrl-group button:hover {
+  background-color: #1c251e !important;
+}
+
+.maplibregl-ctrl-group button:active {
+  background-color: #2c3a2f !important;
+}
+
+.maplibregl-ctrl-group button:focus {
+  box-shadow: 0 0 0 2px #d96b27 !important;
+}
+
+.maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23dfd7c8' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E") !important;
+}
+
+.maplibregl-ctrl button.maplibregl-ctrl-zoom-in:hover .maplibregl-ctrl-icon {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23d96b27' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E") !important;
+}
+
+.maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23dfd7c8' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E") !important;
+}
+
+.maplibregl-ctrl button.maplibregl-ctrl-zoom-out:hover .maplibregl-ctrl-icon {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23d96b27' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E") !important;
+}
+
+.maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath fill='%23d96b27' d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%23dfd7c8' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E") !important;
+}
+
+.maplibregl-ctrl-attrib {
+  background-color: rgba(14, 19, 15, 0.75) !important;
+  color: #918b80 !important;
+  font-size: 10px !important;
+}
+
+.maplibregl-ctrl-attrib a {
+  color: #dfd7c8 !important;
+}

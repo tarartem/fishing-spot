@@ -44,6 +44,13 @@
      - **Wide area**: View is too wide (`> 1.8 km`) — fine structures like weed lines, brush cover, and shallow drop-offs cannot be resolved.
    - **1-Click Optimize Area Action**: When the selection is `Too tight` or `Wide area`, an **"Optimize Area"** button (with Lucide `Sparkles` icon) is surfaced. Clicking it instantly re-centers and resizes the crop to the optimal tactical scale (`~1.0 km × 1.0 km`), re-renders the gridded preview, and provides a **"Revert"** undo button (with Lucide `Undo2` icon).
 
+5. **Verhunt Field Navigation & Zoom Controls**:
+   - The MapLibre `NavigationControl` (zoom in, zoom out, compass reset) in the bottom-right corner matches the tactical angler field aesthetic:
+     - Background: Deep Olive (`#151c16` / `rgba(21, 28, 22, 0.95)`) with frosted backdrop-blur and 1px Ripstop Seam border (`#2c3a2f`).
+     - Radius: Clean 8px (`rounded-lg`) milled edges with subtle drop shadow.
+     - Icons: High-contrast Warm Sand Fleece Khaki (`#dfd7c8`) vector SVGs (+ and -), transitioning to Verhunt Caldero Rust (`#d96b27`) on hover/active states.
+     - Compass needle: Bi-color North needle in Caldero Rust (`#d96b27`) and South needle in Khaki (`#dfd7c8`).
+
 ---
 
 ## 3. Testable Acceptance Criteria (Given / When / Then)
@@ -54,3 +61,4 @@
 - **AC-F01-5 (GPS Coordinate Search Parsing)**: Given a user inputs valid GPS coordinates into the search bar (e.g., `39.248, -0.935` or `39.248 -0.935`), When the search is submitted, Then the map immediately flies to those exact coordinates without sending an external Nominatim network request.
 - **AC-F01-6 (Floating CTA Scan Fishing Waters)**: Given the main map view is loaded, When checking the capture controls, Then `SCAN FISHING WATERS` is the single prominent floating primary CTA with Lucide vector iconography and high-visibility Verhunt Caldero rust styling (`#d96b27`) without a surrounding black container box.
 - **AC-F01-7 (Terrain in Preview Imagery Selector)**: Given the Selected Area Preview modal is open, When inspecting the imagery selector, Then `IGN PNOA HD`, `Esri World`, and `Terrain` are all selectable.
+- **AC-F01-8 (Verhunt Field Navigation Controls)**: Given the main map view is loaded, When inspecting the bottom-right map navigation control (`.maplibregl-ctrl-group`), Then its background is styled with Deep Olive (`#151c16`) and Ripstop Seam border (`#2c3a2f`), with Warm Sand Khaki icons that transition to Caldero Rust on hover.

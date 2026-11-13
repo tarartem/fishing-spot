@@ -191,8 +191,8 @@ export default function HomePage() {
     loadPins();
   }, []);
 
-  // Search any reservoir, river, town, or direct GPS coordinates in Spain
-  const handleSearchSpainLocation = async (e: React.FormEvent) => {
+  // Search any reservoir, river, town, or direct GPS coordinates
+  const handleSearchLocation = async (e: React.FormEvent) => {
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q) return;
@@ -211,7 +211,7 @@ export default function HomePage() {
       return;
     }
 
-    // 2. Check local curated Spain water bodies first
+    // 2. Check local curated water bodies first
     const localMatch = waterBodyPins.find(
       (p) =>
         p.name.toLowerCase().includes(q.toLowerCase()) ||
@@ -229,10 +229,10 @@ export default function HomePage() {
       return;
     }
 
-    // 3. Query OpenStreetMap Nominatim (prioritizing Spain `countrycodes=es`)
+    // 3. Query OpenStreetMap Nominatim
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=es&q=${encodeURIComponent(q)}&limit=1`
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}&limit=1`
       );
       if (res.ok) {
         const results = await res.json();
@@ -507,7 +507,7 @@ export default function HomePage() {
           </div>
           <div>
             <h1 className="text-sm font-bold text-white leading-tight">
-              Fishing Spot · Spain
+              Fishing Spot
             </h1>
             <p className="text-[11px] text-slate-400">
               Find top fishing spots using satellite &amp; terrain data
@@ -515,9 +515,9 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Search Bar to Navigate to Any Spanish Water Body or GPS Coordinates */}
+        {/* Search Bar to Navigate to Any Water Body or GPS Coordinates */}
         <form
-          onSubmit={handleSearchSpainLocation}
+          onSubmit={handleSearchLocation}
           className="flex flex-1 max-w-md items-center gap-1.5"
         >
           <input
@@ -525,7 +525,7 @@ export default function HomePage() {
             data-testid="water-body-search-input"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search Spanish lake, river, town or GPS coordinates..."
+            placeholder="Search lake, river, town or GPS coordinates..."
             className="w-full rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
           />
           <button

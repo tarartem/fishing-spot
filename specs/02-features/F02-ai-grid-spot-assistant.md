@@ -77,7 +77,9 @@
 
 6. **Professional Minimalist Report UI & 1-Page PDF Export ("Multiple X's" Stacking Rationale)**:
    - **Main Screen Brand Identity**:
-     - Main top header displays the clear value proposition directly below the logo: *"Find top fishing spots using satellite & terrain data"*.
+     - Main top header title is **Fishing Spot** (without country restriction).
+     - Displays the clear value proposition directly below the logo: *"Find top fishing spots using satellite & terrain data"*.
+     - Global search input allows finding any lake, river, town, or direct GPS coordinates worldwide.
      - Header includes the **"My spots (N) ▾"** dropdown button, which displays the count of saved reports and reveals a scrollable list of previous analyses with water body name, hotspot count, and relative timestamp.
    - **Map Landing & Selection Preview**:
      - Concise reticle hint (`Frame your fishing area`) and single floating primary emerald CTA `🎯 Select This Area` without surrounding dark wrapper box.

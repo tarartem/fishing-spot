@@ -225,21 +225,37 @@ function enrichSpotWithRoadAccess(
     spot.y_percent,
     geo.geographicalContext.relief_range_m
   );
-  if (geo.roads.length > 0 || !spot.access_summary) {
-    const roadCheck = classifySpotRoadAccess({
-      spotLng,
-      spotLat,
-      roads: geo.roads,
-      sectorReliefM: localReliefM,
-      fallbackRoadNames: geo.detectedRoads,
-    });
+  const roadCheck = classifySpotRoadAccess({
+    spotLng,
+    spotLat,
+    roads: geo.roads,
+    sectorReliefM: localReliefM,
+    fallbackRoadNames: geo.detectedRoads,
+  });
+
+  const rawSummary = (spot.access_summary || '').trim();
+  const hasDetailedVisualCue =
+    rawSummary.length > 20 &&
+    !rawSummary.toLowerCase().includes('steep canyon') &&
+    !rawSummary.toLowerCase().includes('relief_range');
+
+  if (hasDetailedVisualCue) {
+    const finalMode =
+      roadCheck.access_mode === 'car_asphalt'
+        ? 'car_asphalt'
+        : spot.access_mode || roadCheck.access_mode;
     return {
       ...spot,
-      access_mode: roadCheck.access_mode,
-      access_summary: roadCheck.access_summary,
+      access_mode: finalMode,
+      access_summary: rawSummary,
     };
   }
-  return spot;
+
+  return {
+    ...spot,
+    access_mode: roadCheck.access_mode,
+    access_summary: roadCheck.access_summary,
+  };
 }
 
 function normalizeAccessMode(raw: unknown): SpotAccessMode {
@@ -445,7 +461,7 @@ ${geo.wikipediaExtract ? `- Official Hydrological Summary: ${geo.wikipediaExtrac
 - ${scaleInstruction}
 
 === 4. TERRAIN, ALTITUDE & ROAD SURFACE ACCESS ===
-- Water Surface Altitude: ~${geo.geographicalContext.water_elevation_m}m ASL (Surrounding relief: +${geo.geographicalContext.relief_range_m}m)
+- Water Surface Altitude: ${typeof geo.geographicalContext.water_elevation_m === 'number' ? `~${geo.geographicalContext.water_elevation_m}m ASL` : 'Unverified (DEM timeout)'} (Surrounding relief: +${geo.geographicalContext.relief_range_m}m)
 - OSM Road & Track Surfaces: ${geo.roadPromptSummary}
 - Shoreline Steepness by Sector:
 ${geo.sectorSlopePromptSummary}
@@ -639,7 +655,7 @@ ${geo.sectorSlopePromptSummary}
               region_label: normalizedRegion,
               water_body_summary:
                 parsed.water_body_summary ||
-                `Satellite, terrain (${geo.geographicalContext.water_elevation_m}m ASL), road-surface & Spain regulatory analysis of ${geo.waterBodyName}.`,
+                `Satellite, terrain (${typeof geo.geographicalContext.water_elevation_m === 'number' ? `${geo.geographicalContext.water_elevation_m}m ASL` : 'unverified elevation'}), road-surface & Spain regulatory analysis of ${geo.waterBodyName}.`,
               imagery_freshness_note: IMAGERY_FRESHNESS_NOTE,
               extraction_limitations: combinedLimitations,
               screenshot_feature_inventory: combinedInventory,
@@ -822,7 +838,7 @@ function buildFallbackGeospatialAnalysis(
     analysis_source: 'geospatial_fallback',
     water_body_name: geo.waterBodyName,
     region_label: geo.regionLabel.replace(/\bEspaña\b/g, 'Spain'),
-    water_body_summary: `${geo.geographicalContext.scale_label} for ${geo.waterBodyName} (${geo.regionLabel.replace(/\bEspaña\b/g, 'Spain')}) at ~${geo.geographicalContext.water_elevation_m}m ASL (DEM est.).`,
+    water_body_summary: `${geo.geographicalContext.scale_label} for ${geo.waterBodyName} (${geo.regionLabel.replace(/\bEspaña\b/g, 'Spain')}) ${typeof geo.geographicalContext.water_elevation_m === 'number' ? `at ~${geo.geographicalContext.water_elevation_m}m ASL (DEM est.)` : '(DEM elevation unverified)'}.`,
     imagery_freshness_note: IMAGERY_FRESHNESS_NOTE,
     extraction_limitations: [
       'Shoreline contours and access inferred conservatively from hydrographic geometry, road network, and DEM elevation models (verify local water levels and bank footing on site).',

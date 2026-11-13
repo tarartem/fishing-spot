@@ -96,7 +96,7 @@
         "shore_accessibility_summary"
       ],
       "properties": {
-        "water_elevation_m": { "type": "number" },
+        "water_elevation_m": { "type": ["number", "null"] },
         "relief_range_m": { "type": "number" },
         "scale_mode": { "type": "string", "enum": ["micro", "meso", "macro"] },
         "scale_label": { "type": "string" },

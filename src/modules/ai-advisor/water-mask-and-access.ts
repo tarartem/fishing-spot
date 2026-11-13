@@ -953,13 +953,6 @@ export function classifySpotRoadAccess(params: {
     };
   }
 
-  if (sectorReliefM > 55) {
-    return {
-      access_mode: 'boat_only',
-      access_summary: `Steep canyon ${dirLabel}bank (+${Math.round(sectorReliefM)}m relief) — check shore footpath access or verify local watercraft/floatation rules before launching`,
-    };
-  }
-
   const pt = point([spotLng, spotLat]);
   let nearestPaved: { road: OsmRoadSegment; distKm: number } | null = null;
   let nearestTrack: { road: OsmRoadSegment; distKm: number } | null = null;
@@ -982,18 +975,32 @@ export function classifySpotRoadAccess(params: {
   const pavedMeters = nearestPaved ? Math.round(nearestPaved.distKm * 1000) : Infinity;
   const trackMeters = nearestTrack ? Math.round(nearestTrack.distKm * 1000) : Infinity;
 
-  if (nearestPaved && pavedMeters <= 180 && sectorReliefM <= 25) {
+  // Check drivable roads first — anglers drive to bank access even in rolling or hilly terrain
+  if (nearestPaved && pavedMeters <= 200) {
     const label = nearestPaved.road.name || 'Paved road';
+    if (sectorReliefM > 65) {
+      return {
+        access_mode: 'boat_only',
+        access_summary: `Sheer canyon cliff (+${Math.round(sectorReliefM)}m drop below ${label}) — verify safe foot descent or launch watercraft`,
+      };
+    }
+    const slopeDesc = sectorReliefM <= 12 ? 'flat' : sectorReliefM <= 25 ? 'gentle' : 'moderate';
     return {
       access_mode: 'car_asphalt',
       access_summary: isOffshoreOpenWater
         ? `Asphalt road (${label}) · ~${pavedMeters}m to ${dirLabel}bank for long-cast reach, or permitted watercraft`
-        : `Asphalt road (${label}) · ~${pavedMeters}m ${sectorReliefM <= 12 ? 'flat' : 'gentle'} walk to ${dirLabel}bank`,
+        : `Asphalt road (${label}) · ~${pavedMeters}m ${slopeDesc} walk to ${dirLabel}bank`,
     };
   }
 
-  if (nearestTrack && trackMeters <= 250 && sectorReliefM <= 30 && trackMeters <= pavedMeters) {
+  if (nearestTrack && trackMeters <= 300 && trackMeters <= pavedMeters) {
     const label = nearestTrack.road.name || 'Unpaved dirt track';
+    if (sectorReliefM > 65) {
+      return {
+        access_mode: 'boat_only',
+        access_summary: `Sheer cliff bank (+${Math.round(sectorReliefM)}m drop below ${label}) — check safe footpath access or launch watercraft`,
+      };
+    }
     const gradeNote = nearestTrack.road.tracktype
       ? ` (${nearestTrack.road.tracktype}${['grade3', 'grade4', 'grade5'].includes(nearestTrack.road.tracktype) ? ', high-clearance' : ''})`
       : ' (dirt/gravel)';
@@ -1010,6 +1017,12 @@ export function classifySpotRoadAccess(params: {
   if (bestRoad && bestRoad.distKm <= 1.5) {
     const distM = Math.round(bestRoad.distKm * 1000);
     const kind = isPavedRoad(bestRoad.road) ? 'asphalt road' : 'dirt track';
+    if (sectorReliefM > 65) {
+      return {
+        access_mode: 'boat_only',
+        access_summary: `Steep canyon bank (+${Math.round(sectorReliefM)}m relief, ~${distM}m from ${bestRoad.road.name || kind}) — verify foot descent or launch watercraft`,
+      };
+    }
     return {
       access_mode: 'hike_in',
       access_summary: isOffshoreOpenWater
@@ -1018,7 +1031,8 @@ export function classifySpotRoadAccess(params: {
     };
   }
 
-  if (sectorReliefM > 35) {
+  // No mapped road within 1.5km
+  if (sectorReliefM > 40) {
     return {
       access_mode: 'boat_only',
       access_summary: `Steep bank (+${Math.round(sectorReliefM)}m relief, no mapped road) — check shore trail or verify local watercraft rules`,

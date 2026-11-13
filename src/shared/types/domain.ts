@@ -162,7 +162,7 @@ export interface GridArtifactSpot {
 export type ScaleAnalysisMode = 'micro' | 'meso' | 'macro';
 
 export interface ArtifactGeographicalContext {
-  water_elevation_m: number;
+  water_elevation_m: number | null;
   relief_range_m: number;
   scale_mode?: ScaleAnalysisMode;
   scale_label: string;

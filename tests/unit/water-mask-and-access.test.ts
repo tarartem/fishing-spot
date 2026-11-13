@@ -170,6 +170,27 @@ describe('F02 — Water-Only Cell Masking, Inland Pin Snapping & Road Surface Ac
       sectorReliefM: 72,
     });
     expect(steepCliff.access_mode).toBe('boat_only');
+
+    // Madrid Jarama plain / Vallequillas: flat or rolling terrain near roads NEVER triggers steep canyon boat_only
+    const flatValleyAsphalt = classifySpotRoadAccess({
+      spotLng: -0.9615,
+      spotLat: 39.24,
+      roads: [asphaltRoad],
+      sectorReliefM: 10,
+    });
+    expect(flatValleyAsphalt.access_mode).toBe('car_asphalt');
+    expect(flatValleyAsphalt.access_summary).not.toContain('Steep canyon');
+    expect(flatValleyAsphalt.access_summary.toLowerCase()).not.toContain('boat');
+
+    // Rolling hillside with nearby road gives road access, not boat_only
+    const rollingHillAsphalt = classifySpotRoadAccess({
+      spotLng: -0.9615,
+      spotLat: 39.24,
+      roads: [asphaltRoad],
+      sectorReliefM: 58,
+    });
+    expect(rollingHillAsphalt.access_mode).toBe('car_asphalt');
+    expect(rollingHillAsphalt.access_summary).toContain('CV-428');
   });
 
   it('stitches unclosed & reversed OSM multipolygon outer ways into a closed reservoir polygon (AC-F02-7)', () => {

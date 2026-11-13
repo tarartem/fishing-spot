@@ -41,10 +41,18 @@
 
 3. **Detailed Terrain Steepness & Road-Surface Accessibility**:
    - **Road & Track Network (OSM Overpass `way["highway"]`)**: Fetches roads/tracks inside `bbox` (+500m margin), extracting `highway` type, `surface` (`asphalt`, `paved`, `concrete`, `unpaved`, `dirt`, `gravel`, `ground`), `tracktype` (`grade1`–`grade5`), and `access` (`private`/`agricultural`).
-   - **Elevation & Slope Profile**: Samples elevation across the bbox sectors and verified water/spot coordinates (using **Open-Meteo 90m Copernicus DEM**, labeled `DEM est.`) to compute water surface altitude (`m ASL`, preferring verified water-cell samples), surrounding relief (`Δm`), and **per-spot local sector bank slope** (never applying global bbox `relief_range_m` identically across every spot).
-   - **Per-Spot Access Classification & Watercraft Caveat**: Using Turf.js (`@turf/nearest-point-on-line` / `@turf/point-to-line-distance`) + Nominatim perimeter road fallback when Overpass segments are sparse, computes distance from each spot to the nearest drivable road/track and attaches:
-     - `access_mode`: `'car_asphalt' | 'dirt_track' | 'hike_in' | 'boat_only'`
-     - `access_summary`: Practical instruction citing **only roads spatially near that spot** (never repeating a single global Nominatim street across opposite shores of a multi-kilometer reservoir), e.g., *"Asphalt road CV-428 · ~60m flat walk to bank"*, *"Dirt track (grade2) · ~120m walk to water"*, *"No mapped road in immediate sector — verify local bank tracks"*, or *"Steep bank (+45m relief, no mapped road) — check shore trails or verify local watercraft/floatation rules before launching"*.
+   - **Elevation & Slope Profile (7-Second Resilience & Neutral Fallback)**:
+     - Samples elevation across bbox sectors and verified water/spot coordinates using **Open-Meteo 90m Copernicus DEM** (`DEM est.`) with a resilient `7000ms` network timeout to prevent cloud latency drops.
+     - If the DEM service times out or is unreachable, `water_elevation_m` degrades gracefully to `null` (displayed as `Elevation: ~Unverified (DEM timeout)`), while surrounding relief defaults to a neutral `10m` baseline (`relief_range_m: 10`), preventing false 95m canyon cliff hallucinations.
+   - **Road-First Access Classification Priority**:
+     - Evaluates drivable road proximity **before** slope relief so anglers are never told a spot is an inaccessible canyon cliff when an asphalt or gravel road sits 50m away:
+       1. **Offshore Open Water**: Spots with `shoreDistanceM > 75m` are classified as `boat_only` (watercraft/float-tube required).
+       2. **Drivable Roads First**:
+          - Paved/asphalt road within `200m` -> `car_asphalt` (drive-in shore access).
+          - Dirt/gravel track within `300m` -> `dirt_track`.
+          - Road within `1.5 km` -> `hike_in` (`~Xm walk from road`).
+       3. **Steep Cliff Caveat**: `boat_only` for steep banks is strictly reserved for spots with **no road within 1.5 km AND verified steep relief (> 40m)**.
+       4. **Preserving Vision Intelligence**: When Gemini Vision identifies specific visual access features (such as parking lots, docks, boat ramps, or footpaths), that description is preserved and augmented rather than overwritten with a canned heuristic template.
 
 4. **Optimal Scale, Resolution Gating, Non-Hardcoded Tactics & 12-Feature Extraction Engine**:
    - **Exact Ground Resolution & Sharp Tile Stitching**: Computes `metersPerPixel = (maxSpanKm * 1000) / 1024` in `scale-utils.ts` and uses `Math.ceil` tile zoom selection (`z12–z18` for PNOA HD, `z12–z17` for Esri) in `screenshot-compositor.ts` so `1024×1024` imagery is never downsampled unnecessarily.
@@ -77,13 +85,16 @@
    - **Preparation State (Single-Feature Sequential Stepper)**: While analysis runs, a dedicated dialog demonstrates **1 concise capability at a time** across all 6 checkpoints sequentially with:
      - Header title dynamically displaying the target water body: `Analyzing {Name}` (e.g., `Analyzing Embalse de Cortes`, falling back to `Analyzing Selected Basin`).
      - Fixed description container height to guarantee zero vertical layout jitter between 1-line and 2-line step descriptions.
-   - **Sticky Analysis Header & Top-Right Action Group**:
-     - The artifact header is sticky (`sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md`) so action buttons remain visible and clickable regardless of how far the angler scrolls through the spots.
+   - **Sticky Analysis Header & Ordered 2-Row Layout (Zero Height Jitter)**:
+     - The artifact header is sticky (`sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md`) with two dedicated, ordered rows:
+       - **Row 1 (Title)**: `<h2>` Title (e.g., `Vallequillas (Sector)`). If no fishable water exists, shows a `⚠️ No Fishable Water Detected` badge beside the title. Developer status chip (`✓ Location Analysis Ready`) is removed.
+       - **Row 2 (Subtitle & GPS)**: Subtitle `region_label` (e.g. `San Martín de la Vega, Community of Madrid, Spain`) followed by `·` and GPS coordinates pill with a standard 2-rectangles clipboard SVG copy button.
      - **Top-Right Action Buttons**:
        - `[ 📄 PDF Report ]` (Secondary action: slate surface)
        - `[ 🖼️ Map PNG ]` (Secondary action: slate surface)
        - `[ ✨ Analyze Another Location ]` (Primary CTA: emerald solid, clearly signaling ability to start a new analysis) or `[ ← Reposition Map Over Water ]` if no fishable water exists.
-     - **GPS Coordinates in Header**: Displays the analyzed sector's center GPS coordinates (e.g. `📍 39.24812, -0.93540`) as a clickable hyperlink redirecting to Google Maps in a new tab, paired with an adjacent `📋` copy button that copies coordinates to the clipboard buffer with transient `✓ Copied!` confirmation.
+   - **Removal of Redundant "Spot Rank & Structure Legend"**:
+     - Eliminates the confusing and redundant legend card under the map screenshot, elevating **Fish Species Present**, **Hydrographic Conditions**, and **Fishing Regulations** cards by ~75px so they are immediately visible without vertical scrolling.
    - **Water Body & Fish Species Card**: Name, region, altitude/scale, and structured **Fish Species Present** in English.
    - **Scannable Minimalist Spot Cards (`1–6`) with Stacking Rationale**:
      - Clean semantic rank indicator: **Green** (`#22c55e`) for Spots 1–2 (Prime/Trophy), **Blue** (`#0ea5e9`) for Spots 3–4 (Sheltered/Accessible), and **Yellow** (`#eab308`) for Spots 5–6 (Secondary/Bottlenecks).
@@ -92,12 +103,12 @@
      - Compact tactical approach & technique notes without visual clutter or nested boxes.
    - **Practical Access & Game Plan (`best_game_plan`)**: Ordered parking/road → walking → fishing route.
    - **Spain Regulations Card**: Concise status/permit/exclusion summary verifying whether fishing is allowed (the only place where Spanish legal/permit terms appear).
-   - **Dedicated Metadata Footer**:
-     - Relocates technical metadata out of the header into a clean footer at the bottom of the analysis card:
-       - Export filename (`fishing-spot-grid-<slug>.png`) & Report ID (`FS-xxx`)
-       - Generated timestamp
-       - App version (`v0.3.1`)
-       - Data attribution notice (`AI Hydrographic Intelligence · OpenStreetMap, IGN PNOA & Esri`)
+   - **Dedicated Minimalist Metadata Footer**:
+     - Strips developer noise (removes internal PNG filename `📁 fishing-spot-grid-...` and attribution string `AI Hydrographic Intelligence · IGN PNOA, Esri & OpenStreetMap`).
+     - Displays clean, purposeful metadata:
+       - Report ID (`ID: FS-xxx`)
+       - Generated timestamp (`📅 {date}`)
+       - App version (`v{app_version}`)
 
 ---
 

@@ -309,7 +309,7 @@ export { computeSelectionScale };
  * to determine water surface altitude (m ASL) and surrounding shoreline bank steepness.
  */
 async function fetchElevationAndSlopeProfile(bbox: BoundingBox): Promise<{
-  waterElevationM: number;
+  waterElevationM: number | null;
   reliefRangeM: number;
   shoreAccessibilitySummary: string;
   sectorSlopePromptSummary: string;
@@ -336,7 +336,7 @@ async function fetchElevationAndSlopeProfile(bbox: BoundingBox): Promise<{
     const lngs = samplePoints.map((p) => p.lng.toFixed(5)).join(',');
     const res = await fetch(
       `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lngs}`,
-      { signal: AbortSignal.timeout(3000) }
+      { signal: AbortSignal.timeout(7000) }
     );
 
     if (res.ok) {
@@ -405,12 +405,12 @@ async function fetchElevationAndSlopeProfile(bbox: BoundingBox): Promise<{
   }
 
   return {
-    waterElevationM: 380,
-    reliefRangeM: 95,
+    waterElevationM: null,
+    reliefRangeM: 10,
     shoreAccessibilitySummary:
       'Mixed topography: verify shore slope and footpath footing on site before descending steep banks.',
     sectorSlopePromptSummary:
-      '- DEM elevation service unavailable; verify local shoreline steepness from satellite relief cues.',
+      '- DEM elevation service unavailable (timeout); verify local shoreline steepness from satellite relief cues.',
     sectorSamples: [],
   };
 }
@@ -697,7 +697,7 @@ export async function buildEnrichedGeospatialContext(
         detectedWaterType,
         waterBodyName,
         autonomousCommunity,
-        refinedWaterElevationM
+        refinedWaterElevationM ?? 0
       )
     : undefined;
   const regionalFallback = buildSpeciesRoster(
@@ -705,7 +705,7 @@ export async function buildEnrichedGeospatialContext(
     detectedWaterType,
     waterBodyName,
     autonomousCommunity,
-    refinedWaterElevationM
+    refinedWaterElevationM ?? 0
   );
 
   const speciesPresentDefaults = mergeSpeciesWithOccurrences({

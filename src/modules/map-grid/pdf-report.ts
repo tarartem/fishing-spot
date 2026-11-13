@@ -100,7 +100,10 @@ export function buildOnePageFishingPdfDoc(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(148, 163, 184);
-  const elev = analysis.geographical_context?.water_elevation_m ?? '-';
+  const elev =
+    typeof analysis.geographical_context?.water_elevation_m === 'number'
+      ? `${analysis.geographical_context.water_elevation_m}m ASL`
+      : 'Unverified (DEM timeout)';
   const relief = analysis.geographical_context?.relief_range_m ?? '-';
   const sourceLabel =
     analysis.analysis_source === 'geospatial_fallback'

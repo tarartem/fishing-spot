@@ -467,12 +467,6 @@ export default function HomePage() {
     ? ((currentArtifact.bbox[0] + currentArtifact.bbox[2]) / 2).toFixed(5)
     : '0.00000';
   const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${centerLat},${centerLng}`;
-  const artifactSlug = currentArtifact
-    ? currentArtifact.analysis.water_body_name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-    : '';
-  const artifactFileName = `fishing-spot-grid-${artifactSlug}.png`;
   const reportId = currentArtifact
     ? currentArtifact.analysis.report_id || currentArtifact.report_id
     : '';
@@ -800,23 +794,29 @@ export default function HomePage() {
           <div className="mx-auto max-w-6xl rounded-2xl border border-emerald-500/50 bg-slate-900 shadow-2xl overflow-hidden">
             {/* Artifact Sticky Top Header — Buttons Always Anchored in Top Right */}
             <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900/95 px-5 py-3.5 shadow-md backdrop-blur-md">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  {currentArtifact.analysis.has_fishable_water === false ? (
-                    <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-bold uppercase text-amber-300">
+              <div className="min-w-0 flex-1 space-y-1">
+                {/* Row 1: Title & Optional Warning Badge */}
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <h2
+                    data-testid="recognized-water-body-name"
+                    className="text-xl font-bold tracking-tight text-white truncate"
+                  >
+                    {currentArtifact.analysis.water_body_name}
+                  </h2>
+                  {currentArtifact.analysis.has_fishable_water === false && (
+                    <span className="shrink-0 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-bold uppercase text-amber-300">
                       ⚠️ No Fishable Water Detected
                     </span>
-                  ) : (
-                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
-                      ✓ Location Analysis Ready
-                    </span>
                   )}
-                  <span className="text-xs text-slate-400">
+                </div>
+
+                {/* Row 2: Subtitle (Region) · GPS Location with 2-Rectangles Copy Icon */}
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                  <span className="truncate max-w-[340px] sm:max-w-[440px] text-slate-300">
                     {currentArtifact.analysis.region_label}
                   </span>
-
-                  {/* GPS Coordinates Hyperlink + Copy to Clipboard Button */}
-                  <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950/80 px-2.5 py-0.5 text-xs">
+                  <span className="text-slate-600">·</span>
+                  <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-800 bg-slate-950/80 px-2 py-0.5 text-xs">
                     <a
                       href={googleMapsUrl}
                       target="_blank"
@@ -831,23 +831,28 @@ export default function HomePage() {
                       data-testid="copy-gps-button"
                       onClick={handleCopyGps}
                       title="Copy coordinates to clipboard"
-                      className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:bg-slate-800 hover:text-white transition"
+                      className="inline-flex items-center gap-1 rounded p-0.5 text-slate-400 hover:bg-slate-800 hover:text-white transition"
                     >
                       {copiedGps ? (
-                        <span className="text-emerald-400 font-bold">✓ Copied!</span>
+                        <span className="text-[10px] text-emerald-400 font-bold px-1">✓ Copied!</span>
                       ) : (
-                        <span>📋 Copy</span>
+                        <svg
+                          className="h-3.5 w-3.5 text-slate-400 hover:text-slate-200"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-label="Copy coordinates"
+                        >
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                        </svg>
                       )}
                     </button>
                   </div>
                 </div>
-
-                <h2
-                  data-testid="recognized-water-body-name"
-                  className="mt-1 text-xl font-bold tracking-tight text-white truncate"
-                >
-                  {currentArtifact.analysis.water_body_name}
-                </h2>
               </div>
 
               {/* Action Buttons: Always in top-right corner with consistent primary/secondary hierarchy */}
@@ -942,27 +947,6 @@ export default function HomePage() {
                   />
                 </div>
 
-                {/* Grid Legend */}
-                <div className="w-full rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-300 space-y-1.5">
-                  <p className="font-semibold text-slate-300 text-[11px] tracking-wide uppercase">
-                    Spot Rank &amp; Structure Legend
-                  </p>
-                  <div className="flex flex-wrap items-center gap-3.5 text-xs">
-                    <span className="inline-flex items-center gap-1.5 text-slate-200">
-                      <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]" />
-                      <strong className="text-emerald-400 font-semibold">1–2:</strong> Top Ranked
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 text-slate-200">
-                      <span className="h-2.5 w-2.5 rounded-full bg-[#0ea5e9]" />
-                      <strong className="text-sky-400 font-semibold">3–4:</strong> Mid Ranked
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 text-slate-200">
-                      <span className="h-2.5 w-2.5 rounded-full bg-[#eab308]" />
-                      <strong className="text-amber-400 font-semibold">5–6:</strong> Secondary
-                    </span>
-                  </div>
-                </div>
-
                 {/* Fish Species Present in This Water Body */}
                 {currentArtifact.analysis.species_present &&
                   currentArtifact.analysis.species_present.length > 0 && (
@@ -1010,7 +994,9 @@ export default function HomePage() {
                         Geography &amp; Shore Access
                       </h3>
                       <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-300 border border-slate-700/60">
-                        ~{currentArtifact.analysis.geographical_context.water_elevation_m}m ASL DEM est. (Δ+{currentArtifact.analysis.geographical_context.relief_range_m}m)
+                        {typeof currentArtifact.analysis.geographical_context.water_elevation_m === 'number'
+                          ? `~${currentArtifact.analysis.geographical_context.water_elevation_m}m ASL DEM est. (Δ+${currentArtifact.analysis.geographical_context.relief_range_m}m)`
+                          : `Elevation: ~Unverified (DEM timeout) (Δ+${currentArtifact.analysis.geographical_context.relief_range_m}m)`}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-300">
@@ -1278,9 +1264,6 @@ export default function HomePage() {
                 <span className="font-mono text-slate-300 bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800">
                   ID: {reportId}
                 </span>
-                <span className="font-mono text-slate-400">
-                  📁 {artifactFileName}
-                </span>
                 <span>
                   📅 {generatedAt}
                 </span>
@@ -1288,9 +1271,6 @@ export default function HomePage() {
               <div className="flex items-center gap-2.5">
                 <span className="font-mono text-sky-400 bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800">
                   v{currentArtifact.analysis.app_version || APP_VERSION}
-                </span>
-                <span className="text-[11px] text-slate-500">
-                  AI Hydrographic Intelligence · IGN PNOA, Esri &amp; OpenStreetMap
                 </span>
               </div>
             </footer>

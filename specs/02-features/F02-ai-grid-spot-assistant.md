@@ -80,27 +80,28 @@
      - Main top header title is **Fishing Spot** (without country restriction).
      - Displays the clear value proposition directly below the logo: *"Find top fishing spots using satellite & terrain data"*.
      - Global search input allows finding any lake, river, town, or direct GPS coordinates worldwide.
-     - Header includes the **"My spots (N) ▾"** dropdown button, which displays the count of saved reports and reveals a scrollable list of previous analyses with water body name, hotspot count, and relative timestamp.
-   - **Map Landing & Selection Preview**:
-     - Concise reticle hint (`Frame your fishing area`) and single floating primary emerald CTA `🎯 Select This Area` without surrounding dark wrapper box.
-     - Streamlined Selection Preview modal: segmented imagery selector (`PNOA HD` | `Esri World` | `Terrain`), smart scale classification (`Optimal` / `Too tight` / `Wide area`), and 1-click `✨ Optimize Area` + `↩️ Revert` controls.
+     - Header includes the **"My spots (N) ▾"** dropdown button (with Lucide `Bookmark` or `MapPin` icon), which displays the count of saved reports and reveals a scrollable list of previous analyses with water body name, hotspot count, and relative timestamp.
+   - **Map Landing & Selection Preview (Marine Navionics & Chartplotter Pro Theme)**:
+     - Concise reticle hint (`Frame your fishing area`) with tactical corner brackets (`┌ ┐ / └ ┘`) and single floating primary nautical amber CTA `Select This Area` (with Lucide `Crosshair` icon) without surrounding dark wrapper box.
+     - Streamlined Selection Preview modal: segmented imagery selector (`PNOA HD` | `Esri World` | `Terrain` with Lucide `Satellite`, `Layers`, `Mountain` icons), smart scale classification (`Optimal` / `Too tight` / `Wide area`), and 1-click `Optimize Area` (Lucide `Sparkles`) + `Revert` (Lucide `Undo2`) controls.
    - **Preparation State (Single-Feature Sequential Stepper)**: While analysis runs, a dedicated dialog demonstrates **1 concise capability at a time** across all 6 checkpoints sequentially with:
      - Header title dynamically displaying the target water body: `Analyzing {Name}` (e.g., `Analyzing Embalse de Cortes`, falling back to `Analyzing Selected Basin`).
      - Fixed description container height to guarantee zero vertical layout jitter between 1-line and 2-line step descriptions.
+     - Precision vector icons from Lucide (`Scan`, `Layers`, `Fish`, `Footprints`, `Scale`, `Crosshair`) replacing raw emojis.
    - **Sticky Analysis Header & Ordered 2-Row Layout (Zero Height Jitter)**:
      - The artifact header is sticky (`sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md`) with two dedicated, ordered rows:
-       - **Row 1 (Title)**: `<h2>` Title (e.g., `Vallequillas (Sector)`). If no fishable water exists, shows a `⚠️ No Fishable Water Detected` badge beside the title. Developer status chip (`✓ Location Analysis Ready`) is removed.
+       - **Row 1 (Title)**: `<h2>` Title (e.g., `Vallequillas (Sector)`). If no fishable water exists, shows a `No Fishable Water Detected` badge beside the title. Developer status chip is removed.
        - **Row 2 (Subtitle & GPS)**: Subtitle `region_label` (e.g. `San Martín de la Vega, Community of Madrid, Spain`) followed by `·` and GPS coordinates pill with a standard 2-rectangles clipboard SVG copy button.
      - **Top-Right Action Buttons**:
-       - `[ 📄 PDF Report ]` (Secondary action: slate surface)
-       - `[ 🖼️ Map PNG ]` (Secondary action: slate surface)
-       - `[ ✨ Analyze Another Location ]` (Primary CTA: emerald solid, clearly signaling ability to start a new analysis) or `[ ← Reposition Map Over Water ]` if no fishable water exists.
+       - `[ PDF Report ]` (Secondary action: slate surface with Lucide `FileText` icon)
+       - `[ Map PNG ]` (Secondary action: slate surface with Lucide `Image` icon)
+       - `[ Analyze Another Location ]` (Primary CTA: oceanic sky/amber with Lucide `Compass` icon, clearly signaling ability to start a new analysis) or `[ Reposition Map Over Water ]` if no fishable water exists.
    - **Removal of Redundant "Spot Rank & Structure Legend"**:
      - Eliminates the confusing and redundant legend card under the map screenshot, elevating **Fish Species Present**, **Hydrographic Conditions**, and **Fishing Regulations** cards by ~75px so they are immediately visible without vertical scrolling.
    - **Water Body & Fish Species Card**: Name, region, altitude/scale, and structured **Fish Species Present** in English.
    - **Scannable Minimalist Spot Cards (`1–6`) with Stacking Rationale**:
-     - Clean semantic rank indicator: **Green** (`#22c55e`) for Spots 1–2 (Prime/Trophy), **Blue** (`#0ea5e9`) for Spots 3–4 (Sheltered/Accessible), and **Yellow** (`#eab308`) for Spots 5–6 (Secondary/Bottlenecks).
-     - Grid cell coordinate in monospace (e.g. `[C4]`), Title, and subtle access badge.
+     - Clean semantic rank indicator: **Gold/Amber** (`#f59e0b` / `#fbbf24`) for Spots 1–2 (Prime/Trophy waypoints), **Sky/Cyan** (`#0ea5e9` / `#38bdf8`) for Spots 3–4 (Sheltered/Accessible), and **Slate/Amber** for Spots 5–6 (Secondary/Bottlenecks).
+     - Grid cell coordinate in monospace (e.g. `[C4]`), Title, and subtle access badge with Lucide transport icons (`Car`, `Truck`, `Sailboat`, `Footprints`).
      - Structured key-values (`Target Species`, `Depth / Structure`) and subtle neutral `influencing_features` tags.
      - Compact tactical approach & technique notes without visual clutter or nested boxes.
    - **Practical Access & Game Plan (`best_game_plan`)**: Ordered parking/road → walking → fishing route.
@@ -135,6 +136,6 @@
   - Flow direction (`flowBearingDeg`, `flowCardinal`, `flowLabel`, `isFlowingWater`, `inflowPoints`) is computed using length-weighted OSM vectors and DEM cross-check (`|Δelev| >= 2m` threshold), while stillwater basins away from scaled inflow plumes (`200m–600m`) remain `stillwater`.
   - On flowing water or inside verified inflow zones, points/channels confirm `current_break` (with downstream-eddy/inflow tie-breaker preference and directional cast/drift tactics citing upstream/downstream flow); on calm stillwater away from inflows, `current_break` is omitted rather than inflated, narrows are titled `Constriction Neck` / `Cove Mouth Pass` with stillwater tactics (never citing `"current edge"`), and `channel_narrowing` spots are capped at max `2` per report when other structures exist.
   - On flowing rivers, `buildDynamicGamePlan` prefers downstream-to-upstream progression among **safe, shore-accessible** spots (terrain safety/slope overrides upstream routing).
-- **AC-F02-14 (Sticky Top-Right Actions & Unified Button Hierarchy)**: Given the analysis report modal is open, When scrolling through spot recommendations and regulations, Then the header remains sticky at the top, the action buttons (`📄 PDF Report`, `🖼️ Map PNG`, `✨ Analyze Another Location`) remain permanently anchored in the top-right corner, and `✨ Analyze Another Location` is styled as the primary emerald CTA (`bg-emerald-500`) while export buttons follow secondary slate styling.
+- **AC-F02-14 (Sticky Top-Right Actions & Unified Button Hierarchy)**: Given the analysis report modal is open, When scrolling through spot recommendations and regulations, Then the header remains sticky at the top, the action buttons (`PDF Report`, `Map PNG`, `Analyze Another Location`) remain permanently anchored in the top-right corner with Lucide vector icons, and `Analyze Another Location` is styled as the primary oceanic cyan/amber CTA while export buttons follow secondary slate styling.
 - **AC-F02-15 (Header GPS Coordinates & Google Maps Link with Copy)**: Given an analyzed sector bounding box, When the analysis header renders, Then it displays the sector center GPS coordinates as a clickable hyperlink opening Google Maps in a new tab (`target="_blank"`), paired with a copy button that copies the coordinates to the clipboard and shows transient `✓ Copied!` confirmation.
 - **AC-F02-16 (Card Footer Metadata)**: Given an analysis report modal, When reviewing technical metadata (Version, Date, Report ID, File Name), Then this metadata is rendered inside the dedicated footer at the bottom of the card, keeping the header clean.

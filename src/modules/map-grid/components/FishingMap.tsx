@@ -2,6 +2,14 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import maplibregl, { type StyleSpecification } from 'maplibre-gl';
+import {
+  AlertTriangle,
+  Crosshair,
+  Globe,
+  Layers,
+  Mountain,
+  Satellite,
+} from 'lucide-react';
 import type {
   BoundingBox,
   MapStyleMode,
@@ -276,7 +284,7 @@ export function FishingMap({
   };
 
   return (
-    <div className="relative h-full w-full select-none bg-[#071722]">
+    <div className="relative h-full w-full select-none bg-[#070d14]">
       {/* MapLibre GL JS Canvas */}
       <div
         ref={mapContainerRef}
@@ -284,14 +292,25 @@ export function FishingMap({
         data-testid="map-canvas"
       />
 
-      {/* Visual Framing Reticle on Map (Exact 1:1 Crop Target) */}
+      {/* Visual Framing Reticle on Map (Tactical Viewfinder Corner Brackets) */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div
           ref={reticleRef}
           data-testid="target-reticle-box"
-          className="h-[64vh] w-[64vh] max-w-[85vw] max-h-[65vw] rounded-2xl border-2 border-dashed border-white/35 shadow-[0_0_0_9999px_rgba(2,6,23,0.22)] flex flex-col justify-end p-3"
+          className="relative h-[64vh] w-[64vh] max-w-[85vw] max-h-[65vw] rounded-lg border border-sky-400/20 shadow-[0_0_0_9999px_rgba(4,10,18,0.35)] flex flex-col justify-end p-3"
         >
-          <div className="text-[11px] font-medium text-slate-200/90 bg-slate-950/75 px-3 py-1 rounded-lg self-center text-center">
+          {/* Tactical Viewfinder Corner Brackets */}
+          <span className="absolute top-0 left-0 h-4 w-4 border-t-2 border-l-2 border-sky-400/80 rounded-tl-sm" />
+          <span className="absolute top-0 right-0 h-4 w-4 border-t-2 border-r-2 border-sky-400/80 rounded-tr-sm" />
+          <span className="absolute bottom-0 left-0 h-4 w-4 border-b-2 border-l-2 border-sky-400/80 rounded-bl-sm" />
+          <span className="absolute bottom-0 right-0 h-4 w-4 border-b-2 border-r-2 border-sky-400/80 rounded-br-sm" />
+
+          {/* Center Crosshair Tick Marker */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="h-2 w-2 rounded-full border border-sky-400/25" />
+          </div>
+
+          <div className="text-[11px] font-mono tracking-wider text-sky-200/90 bg-[#0c1520]/85 border border-sky-500/20 px-3 py-0.5 rounded self-center text-center shadow-lg backdrop-blur-sm">
             Frame your fishing area
           </div>
         </div>
@@ -303,73 +322,83 @@ export function FishingMap({
         <div className="flex flex-wrap items-center gap-2">
           <div
             data-testid="map-style-switcher"
-            className="pointer-events-auto inline-flex items-center rounded-xl border border-slate-700/90 bg-slate-950/90 p-1 shadow-xl backdrop-blur-md"
+            className="pointer-events-auto inline-flex items-center rounded-lg border border-slate-700/80 bg-[#0c1520]/90 p-0.5 shadow-xl backdrop-blur-md"
           >
             {(
               [
-                { id: 'satellite', label: '🛰️ Satellite' },
-                { id: 'terrain', label: '⛰️ Terrain' },
+                { id: 'satellite', label: 'Satellite', icon: Satellite },
+                { id: 'terrain', label: 'Terrain', icon: Mountain },
               ] as const
-            ).map((mode) => (
-              <button
-                key={mode.id}
-                type="button"
-                data-testid={`map-style-${mode.id}`}
-                onClick={() => onChangeMapStyle(mode.id)}
-                className={`rounded-lg px-3 py-1 text-xs font-bold transition ${
-                  mapStyle === mode.id
-                    ? 'bg-emerald-500 text-slate-950 shadow'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                {mode.label}
-              </button>
-            ))}
+            ).map((mode) => {
+              const Icon = mode.icon;
+              const isActive = mapStyle === mode.id;
+              return (
+                <button
+                  key={mode.id}
+                  type="button"
+                  data-testid={`map-style-${mode.id}`}
+                  onClick={() => onChangeMapStyle(mode.id)}
+                  className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                    isActive
+                      ? 'bg-sky-500 text-slate-950 shadow-sm font-bold'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{mode.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           <div
             data-testid="satellite-source-switcher"
-            className="pointer-events-auto inline-flex items-center gap-1 rounded-xl border border-slate-700/90 bg-slate-950/90 p-1 shadow-xl backdrop-blur-md"
+            className="pointer-events-auto inline-flex items-center gap-1 rounded-lg border border-slate-700/80 bg-[#0c1520]/90 p-0.5 shadow-xl backdrop-blur-md"
             title="Switch satellite flight imagery to reduce sun glare or view different water levels"
           >
-            <span className="px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <span className="px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               Imagery:
             </span>
             {(
               [
-                { id: 'pnoa', label: '🛰️ PNOA HD' },
-                { id: 'esri', label: '🌍 Esri Alt' },
+                { id: 'pnoa', label: 'PNOA HD', icon: Layers },
+                { id: 'esri', label: 'Esri Alt', icon: Globe },
               ] as const
-            ).map((src) => (
-              <button
-                key={src.id}
-                type="button"
-                data-testid={`satellite-source-${src.id}`}
-                onClick={() => {
-                  onChangeSatelliteSource(src.id);
-                  if (mapStyle !== 'satellite') onChangeMapStyle('satellite');
-                }}
-                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
-                  satelliteSource === src.id
-                    ? 'bg-sky-400 text-slate-950 shadow'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                {src.label}
-              </button>
-            ))}
+            ).map((src) => {
+              const Icon = src.icon;
+              const isActive = satelliteSource === src.id;
+              return (
+                <button
+                  key={src.id}
+                  type="button"
+                  data-testid={`satellite-source-${src.id}`}
+                  onClick={() => {
+                    onChangeSatelliteSource(src.id);
+                    if (mapStyle !== 'satellite') onChangeMapStyle('satellite');
+                  }}
+                  className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
+                    isActive
+                      ? 'bg-sky-400 text-slate-950 shadow-sm font-bold'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <Icon className="h-3 w-3" />
+                  <span>{src.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Bottom Center Floating Primary CTA: Select This Area */}
+        {/* Bottom Center Floating Primary CTA: High-Vis Nautical Amber */}
         <button
           type="button"
           data-testid="capture-map-area-button"
           onClick={triggerScreenshotCapture}
-          className="pointer-events-auto mb-3 flex items-center gap-2.5 self-center rounded-2xl bg-emerald-500 px-6 py-3 text-sm font-bold text-slate-950 shadow-2xl shadow-emerald-950/70 backdrop-blur-md transition hover:bg-emerald-400 hover:scale-105 active:scale-95"
+          className="pointer-events-auto mb-3 flex items-center gap-2 self-center rounded-lg bg-amber-500 px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-950 shadow-xl shadow-amber-950/60 border border-amber-400/40 backdrop-blur-md transition hover:bg-amber-400 hover:shadow-amber-500/20 active:scale-95"
         >
-          <span className="text-base">🎯</span>
-          <span>Select This Area</span>
+          <Crosshair className="h-4 w-4 stroke-[2.5]" />
+          <span className="tracking-wide">Select This Area</span>
         </button>
       </div>
 
@@ -377,9 +406,9 @@ export function FishingMap({
       {showTerrainMaxZoomToast && mapStyle === 'terrain' && (
         <div
           data-testid="terrain-max-zoom-toast"
-          className="pointer-events-none absolute top-20 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-xl border border-amber-500/40 bg-slate-950/90 px-4 py-2 text-xs font-semibold text-amber-200 shadow-2xl backdrop-blur-md"
+          className="pointer-events-none absolute top-20 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-[#0c1520]/95 px-3.5 py-1.5 text-xs font-semibold text-amber-200 shadow-2xl backdrop-blur-md"
         >
-          <span>⛰️</span>
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
           <span>Maximum terrain detail reached · Switch to Satellite for closer zoom</span>
         </div>
       )}

@@ -43,12 +43,12 @@ test.describe('Fishing Spot — Spain MVP Screenshot-to-Grid Artifact E2E Flow',
     );
 
     const summary = page.getByTestId('where-to-fish-summary');
-    await expect(summary).toContainText('🎯 Where to Fish on the Grid:');
+    await expect(summary).toContainText('Where to Fish on the Grid:');
     await expect(page.getByTestId('artifact-spot-1')).toBeVisible();
     await expect(page.getByTestId('artifact-spot-4')).toBeVisible();
 
     const gamePlan = page.getByTestId('best-game-plan-summary');
-    await expect(gamePlan).toContainText('🚗 Best Game Plan for This Area:');
+    await expect(gamePlan).toContainText('Best Game Plan for This Area:');
 
     // 6. Verify 1-page PDF report download button & English-only UI outside restrictions
     await expect(page.locator('header')).not.toContainText('España');

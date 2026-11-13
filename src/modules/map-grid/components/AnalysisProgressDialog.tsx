@@ -1,9 +1,18 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import {
+  Crosshair,
+  Fish,
+  Footprints,
+  Layers,
+  Scale,
+  Scan,
+  type LucideIcon,
+} from 'lucide-react';
 
 export interface AnalysisProgressStep {
-  icon: string;
+  icon: LucideIcon;
   title: string;
   detail: string;
 }
@@ -12,32 +21,32 @@ export const STEP_DURATION_MS = 900;
 
 export const ANALYSIS_STEPS: AnalysisProgressStep[] = [
   {
-    icon: '🛰️',
+    icon: Scan,
     title: 'Water Boundary Scan',
     detail: 'Mapping shoreline contours and water surface clarity.',
   },
   {
-    icon: '📐',
+    icon: Layers,
     title: 'Bottom Structure',
     detail: 'Detecting underwater points, drop-offs, and shelf edges.',
   },
   {
-    icon: '🎣',
+    icon: Fish,
     title: 'Angler Ecology',
     detail: 'Evaluating wind drift, ambush cover, and baitfish lines.',
   },
   {
-    icon: '🥾',
+    icon: Footprints,
     title: 'Shore & Road Access',
     detail: 'Checking terrain slope, cliffs, and nearby approach trails.',
   },
   {
-    icon: '⚖️',
+    icon: Scale,
     title: 'Regulations Check',
     detail: 'Verifying basin permits and restricted sanctuary zones.',
   },
   {
-    icon: '🎯',
+    icon: Crosshair,
     title: 'Tactical Synthesis',
     detail: 'Ranking top 6 coordinates and optimal cast strategies.',
   },
@@ -77,6 +86,7 @@ export function AnalysisProgressDialog({
   if (!isOpen) return null;
 
   const currentStep = ANALYSIS_STEPS[activeStepIndex];
+  const StepIcon = currentStep.icon;
   const progressPercent = Math.min(
     100,
     Math.round(((activeStepIndex + 1) / ANALYSIS_STEPS.length) * 100)
@@ -92,7 +102,7 @@ export function AnalysisProgressDialog({
       data-testid="analysis-progress-dialog"
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-md transition-opacity duration-300"
     >
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/95 p-6 shadow-2xl space-y-5">
+      <div className="w-full max-w-md rounded-xl border border-slate-800 bg-[#0c1520]/95 p-5 shadow-2xl space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
           <div className="min-w-0 flex-1 mr-3">
@@ -103,7 +113,7 @@ export function AnalysisProgressDialog({
               Hydrographic &amp; Angler Intelligence
             </p>
           </div>
-          <span className="shrink-0 rounded-md bg-slate-800 px-2 py-0.5 font-mono text-[11px] font-semibold text-emerald-400">
+          <span className="shrink-0 rounded border border-sky-500/30 bg-sky-950/60 px-2 py-0.5 font-mono text-[11px] font-semibold text-sky-300">
             {activeStepIndex + 1} / {ANALYSIS_STEPS.length}
           </span>
         </div>
@@ -111,14 +121,14 @@ export function AnalysisProgressDialog({
         {/* Single Active Feature Spotlight (Fixed Height to Prevent Vertical Jitter) */}
         <div
           key={activeStepIndex}
-          className="h-[96px] rounded-xl border border-slate-800 bg-slate-950/70 p-4 flex items-center gap-3.5 overflow-hidden"
+          className="h-[96px] rounded-lg border border-slate-800/80 bg-[#070d14]/80 p-3.5 flex items-center gap-3.5 overflow-hidden"
         >
-          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-base">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-lg bg-emerald-400/15 opacity-75" />
-            <span>{currentStep.icon}</span>
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-sky-500/30 bg-sky-500/10 text-sky-400">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-md bg-sky-400/15 opacity-75" />
+            <StepIcon className="h-5 w-5" />
           </div>
           <div className="flex-1 min-w-0 space-y-0.5">
-            <div className="text-xs font-semibold text-emerald-300">
+            <div className="text-xs font-semibold text-sky-300">
               {currentStep.title}
             </div>
             <div className="text-xs leading-relaxed text-slate-300 line-clamp-2 min-h-[2.5rem] flex items-center">
@@ -131,12 +141,12 @@ export function AnalysisProgressDialog({
         <div className="space-y-1.5">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
             <div
-              className="h-full bg-emerald-400 transition-all duration-500 ease-out"
+              className="h-full bg-sky-400 transition-all duration-500 ease-out"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
           <div className="flex justify-between text-[10px] text-slate-500">
-            <span>Processing under the hood</span>
+            <span>Hydrographic telemetry synthesis</span>
             <span className="font-mono text-slate-400">{progressPercent}%</span>
           </div>
         </div>

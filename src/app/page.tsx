@@ -1,6 +1,40 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  Bookmark,
+  Calendar,
+  Car,
+  ChevronDown,
+  Compass,
+  Crosshair,
+  FileText,
+  Fish,
+  Footprints,
+  Globe,
+  Hash,
+  Image as ImageIcon,
+  Info,
+  Layers,
+  MapPin,
+  Mountain,
+  Navigation,
+  RotateCcw,
+  Sailboat,
+  Satellite,
+  Scale,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  SunMedium,
+  Target,
+  Trophy,
+  Truck,
+  Undo2,
+  type LucideIcon,
+} from 'lucide-react';
 import { FishingMap } from '@/modules/map-grid/components/FishingMap';
 import {
   AnalysisProgressDialog,
@@ -42,32 +76,32 @@ import type {
 type WorkflowStep = 'map_browse' | 'screenshot_preview' | 'artifact_ready';
 
 function formatAccessBadge(mode: SpotAccessMode): {
-  icon: string;
+  icon: LucideIcon;
   label: string;
   classes: string;
 } {
   switch (mode) {
     case 'car_asphalt':
       return {
-        icon: '🚗',
+        icon: Car,
         label: 'Paved Road',
         classes: 'border-slate-700 bg-slate-800/80 text-slate-200',
       };
     case 'dirt_track':
       return {
-        icon: '🚙',
+        icon: Truck,
         label: 'Dirt Track',
         classes: 'border-slate-700 bg-slate-800/80 text-slate-200',
       };
     case 'boat_only':
       return {
-        icon: '🛶',
+        icon: Sailboat,
         label: 'Boat / Cliff Only',
-        classes: 'border-slate-700 bg-slate-800/80 text-rose-300/90',
+        classes: 'border-rose-900/60 bg-rose-950/40 text-rose-300',
       };
     default:
       return {
-        icon: '🥾',
+        icon: Footprints,
         label: 'Foot Trail',
         classes: 'border-slate-700 bg-slate-800/80 text-slate-200',
       };
@@ -77,21 +111,21 @@ function formatAccessBadge(mode: SpotAccessMode): {
 function getSpotRankStyle(rank: number) {
   if (rank <= 2) {
     return {
-      pillClasses: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300',
-      dotColor: 'bg-emerald-400',
-      category: 'Top Ranked',
+      pillClasses: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
+      dotColor: 'bg-amber-400',
+      category: 'Top Waypoint',
     };
   }
   if (rank <= 4) {
     return {
-      pillClasses: 'border-sky-500/30 bg-sky-500/15 text-sky-300',
+      pillClasses: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
       dotColor: 'bg-sky-400',
-      category: 'Mid Ranked',
+      category: 'Mid Sector',
     };
   }
   return {
-    pillClasses: 'border-amber-500/30 bg-amber-500/15 text-amber-300',
-    dotColor: 'bg-amber-400',
+    pillClasses: 'border-slate-700 bg-slate-800/60 text-slate-300',
+    dotColor: 'bg-slate-400',
     category: 'Secondary',
   };
 }
@@ -275,8 +309,7 @@ export default function HomePage() {
   }) => {
     setSelectedBbox(params.bbox);
     setOriginalBboxBeforeOptimization(null);
-    const initialImagery: CaptureImagerySource =
-      mapStyle === 'terrain' ? 'terrain' : satelliteSource;
+    const initialImagery: CaptureImagerySource = satelliteSource;
     setPreviewImagery(initialImagery);
 
     const cLng = (params.bbox[0] + params.bbox[2]) / 2;
@@ -294,10 +327,9 @@ export default function HomePage() {
       sourceCanvas: params.canvas,
       cropBox: params.cropBox,
       bbox: params.bbox,
-      mapStyle: initialImagery === 'terrain' ? 'terrain' : 'satellite',
-      satelliteSource:
-        initialImagery === 'terrain' ? satelliteSource : initialImagery,
-      imagerySource: initialImagery,
+      mapStyle: 'satellite',
+      satelliteSource,
+      imagerySource: satelliteSource,
       waterBodyLabel: wbLabel,
     });
     const griddedUrl = await renderAnnotatedGridScreenshot({
@@ -498,15 +530,15 @@ export default function HomePage() {
   };
 
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
+    <main className="relative h-screen w-screen overflow-hidden bg-[#070d14] text-slate-100">
       {/* Top Floating Header */}
-      <header className="fixed top-3 left-3 right-3 z-50 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-800/90 bg-slate-950/90 px-4 py-2.5 shadow-2xl backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500 font-extrabold text-slate-950">
-            FS
+      <header className="fixed top-3 left-3 right-3 z-50 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-[#0c1520]/95 px-4 py-2 shadow-2xl backdrop-blur-md">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-950/60 text-sky-400 shadow-sm">
+            <Compass className="h-4 w-4" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white leading-tight">
+            <h1 className="text-sm font-bold text-white leading-tight tracking-wide">
               Fishing Spot
             </h1>
             <p className="text-[11px] text-slate-400">
@@ -518,19 +550,22 @@ export default function HomePage() {
         {/* Search Bar to Navigate to Any Water Body or GPS Coordinates */}
         <form
           onSubmit={handleSearchLocation}
-          className="flex flex-1 max-w-md items-center gap-1.5"
+          className="relative flex flex-1 max-w-md items-center gap-1.5"
         >
-          <input
-            type="search"
-            data-testid="water-body-search-input"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search lake, river, town or GPS coordinates..."
-            className="w-full rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
-          />
+          <div className="relative w-full">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+            <input
+              type="search"
+              data-testid="water-body-search-input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search lake, river, town or GPS coordinates..."
+              className="w-full rounded-lg border border-slate-800 bg-[#070d14]/90 pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-400 focus:border-sky-400 focus:outline-none transition"
+            />
+          </div>
           <button
             type="submit"
-            className="rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-1.5 text-xs font-bold text-emerald-300 hover:bg-slate-700 transition"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3.5 py-1.5 text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-700 transition shrink-0"
           >
             Go
           </button>
@@ -542,21 +577,21 @@ export default function HomePage() {
             type="button"
             data-testid="my-spots-dropdown-button"
             onClick={() => setIsMySpotsOpen((prev) => !prev)}
-            className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-950/40 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-900/50 transition"
+            className="flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-950/40 px-3 py-1.5 text-xs font-semibold text-sky-200 hover:bg-sky-900/40 transition"
           >
-            <span>📍</span>
+            <Bookmark className="h-3.5 w-3.5 text-sky-400" />
             <span>My spots ({savedArtifacts.length})</span>
-            <span className="text-[10px] text-emerald-400/80">{isMySpotsOpen ? '▲' : '▼'}</span>
+            <ChevronDown className={`h-3 w-3 text-sky-400/80 transition-transform duration-150 ${isMySpotsOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {isMySpotsOpen && (
             <div
               data-testid="my-spots-dropdown-menu"
-              className="absolute top-full right-0 mt-2 w-80 rounded-2xl border border-slate-800 bg-slate-900/95 p-2.5 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+              className="absolute top-full right-0 mt-2 w-80 rounded-xl border border-slate-800 bg-[#0c1520]/95 p-2.5 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
             >
               <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-800/80 mb-1">
-                <span className="text-xs font-bold text-white">Previous Reports</span>
-                <span className="text-[10px] font-mono text-emerald-400 bg-slate-800 px-2 py-0.5 rounded-md">
+                <span className="text-xs font-bold text-white tracking-wide">Previous Reports</span>
+                <span className="text-[10px] font-mono text-sky-400 bg-slate-800 px-2 py-0.5 rounded">
                   {savedArtifacts.length}
                 </span>
               </div>
@@ -577,23 +612,26 @@ export default function HomePage() {
                         setWorkflowStep('artifact_ready');
                         setIsMySpotsOpen(false);
                       }}
-                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition group ${
+                      className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition group ${
                         currentArtifact?.id === art.id && workflowStep === 'artifact_ready'
-                          ? 'bg-emerald-500/20 border border-emerald-500/40'
-                          : 'hover:bg-slate-800/80'
+                          ? 'bg-sky-500/15 border border-sky-500/40 text-sky-200'
+                          : 'hover:bg-slate-800/70'
                       }`}
                     >
                       <div className="min-w-0 flex-1 mr-2">
-                        <div className="text-xs font-bold text-white group-hover:text-emerald-300 truncate">
+                        <div className="text-xs font-bold text-white group-hover:text-sky-300 truncate">
                           {art.analysis.water_body_name.split('(')[0].trim()}
                         </div>
                         <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                          <span>🎣 {art.analysis.recommended_spots.length} spots</span>
+                          <span className="flex items-center gap-1">
+                            <Fish className="h-3 w-3 text-sky-400" />
+                            <span>{art.analysis.recommended_spots.length} spots</span>
+                          </span>
                           <span>·</span>
                           <span>{formatRelativeTime(art.createdAt || art.analysis.generated_at)}</span>
                         </div>
                       </div>
-                      <span className="text-xs text-slate-500 group-hover:text-emerald-300">→</span>
+                      <span className="text-xs text-slate-500 group-hover:text-sky-300">→</span>
                     </button>
                   ))}
                 </div>
@@ -620,84 +658,102 @@ export default function HomePage() {
           data-testid="screenshot-preview-panel"
           className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/85 p-4 pt-20 backdrop-blur-md overflow-y-auto"
         >
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-2xl space-y-4">
+          <div className="w-full max-w-2xl rounded-xl border border-slate-800 bg-[#0c1520] p-5 shadow-2xl space-y-4">
             {/* Minimalist Header */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
               <div>
-                <h2 className="text-base font-bold text-white">
+                <h2 className="text-base font-bold text-white tracking-wide">
                   Selected Area Preview
                 </h2>
                 <span
                   data-testid="satellite-capture-badge"
-                  className="text-[11px] font-medium text-slate-400"
+                  className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5 mt-0.5"
                 >
-                  {previewImagery === 'terrain'
-                    ? '⛰️ Terrain · OpenTopoMap'
-                    : `🛰️ Satellite · ${previewImagery === 'pnoa' ? 'IGN PNOA HD' : 'Esri World'}`}
+                  {previewImagery === 'terrain' ? (
+                    <>
+                      <Mountain className="h-3 w-3 text-sky-400" />
+                      <span>Terrain · OpenTopoMap</span>
+                    </>
+                  ) : (
+                    <>
+                      <Satellite className="h-3 w-3 text-sky-400" />
+                      <span>
+                        Satellite ·{' '}
+                        {previewImagery === 'pnoa' ? 'IGN PNOA HD' : 'Esri World'}
+                      </span>
+                    </>
+                  )}
                 </span>
               </div>
 
               {/* Segmented Imagery Selector: PNOA HD | Esri World | Terrain */}
               <div
                 data-testid="preview-imagery-selector"
-                className="inline-flex items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-950/80 p-1"
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-700/80 bg-[#070d14]/80 p-0.5"
               >
-                <span className="px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                <span className="px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                   Imagery:
                 </span>
                 {(
                   [
-                    { id: 'pnoa', label: '🛰️ PNOA HD' },
-                    { id: 'esri', label: '🌍 Esri Alt' },
-                    { id: 'terrain', label: '⛰️ Terrain' },
+                    { id: 'pnoa', label: 'PNOA HD', icon: Layers },
+                    { id: 'esri', label: 'Esri Alt', icon: Globe },
+                    { id: 'terrain', label: 'Terrain', icon: Mountain },
                   ] as const
-                ).map((src) => (
-                  <button
-                    key={src.id}
-                    type="button"
-                    data-testid={`preview-imagery-${src.id}`}
-                    onClick={() => handleSwitchPreviewImagery(src.id)}
-                    className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
-                      previewImagery === src.id
-                        ? 'bg-sky-400 text-slate-950 shadow'
-                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                    }`}
-                  >
-                    {src.label}
-                  </button>
-                ))}
+                ).map((src) => {
+                  const Icon = src.icon;
+                  const isActive = previewImagery === src.id;
+                  return (
+                    <button
+                      key={src.id}
+                      type="button"
+                      data-testid={`preview-imagery-${src.id}`}
+                      onClick={() => handleSwitchPreviewImagery(src.id)}
+                      className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
+                        isActive
+                          ? 'bg-sky-400 text-slate-950 shadow-sm font-bold'
+                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="h-3 w-3" />
+                      <span>{src.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Smart Scale Classification & 1-Click Optimize Area */}
             <div
               data-testid="selection-scale-banner"
-              className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-xs ${
+              className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-xs ${
                 previewScale.smartScale.tier === 'optimal'
-                  ? 'border-emerald-500/40 bg-emerald-950/30 text-emerald-200'
+                  ? 'border-sky-500/40 bg-sky-950/20 text-sky-200'
                   : previewScale.smartScale.tier === 'too_tight'
-                  ? 'border-amber-500/40 bg-amber-950/30 text-amber-200'
-                  : 'border-orange-500/40 bg-orange-950/30 text-orange-200'
+                  ? 'border-amber-500/40 bg-amber-950/25 text-amber-200'
+                  : 'border-orange-500/40 bg-orange-950/25 text-orange-200'
               }`}
             >
               <div className="flex items-center gap-2.5 flex-1 min-w-0">
                 <span
                   data-testid="scale-tier-badge"
-                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-bold ${
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-bold ${
                     previewScale.smartScale.tier === 'optimal'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      ? 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
                       : previewScale.smartScale.tier === 'too_tight'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
+                      ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                      : 'bg-orange-500/15 text-orange-300 border border-orange-500/30'
                   }`}
                 >
-                  <span>
-                    {previewScale.smartScale.tier === 'optimal'
-                      ? '🟢'
-                      : previewScale.smartScale.tier === 'too_tight'
-                      ? '🟡'
-                      : '🟠'}
-                  </span>
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      previewScale.smartScale.tier === 'optimal'
+                        ? 'bg-sky-400'
+                        : previewScale.smartScale.tier === 'too_tight'
+                        ? 'bg-amber-400'
+                        : 'bg-orange-400'
+                    }`}
+                  />
                   <span>{previewScale.smartScale.badgeLabel}</span>
                 </span>
                 <span className="text-[11px] text-slate-300">
@@ -711,9 +767,9 @@ export default function HomePage() {
                     type="button"
                     data-testid="optimize-area-button"
                     onClick={handleOptimizeArea}
-                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1 text-xs font-bold text-slate-950 shadow hover:bg-emerald-400 transition"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-sky-500 px-3 py-1 text-xs font-bold text-slate-950 shadow hover:bg-sky-400 transition"
                   >
-                    <span>✨</span>
+                    <Sparkles className="h-3 w-3" />
                     <span>Optimize Area</span>
                   </button>
                 )}
@@ -722,15 +778,16 @@ export default function HomePage() {
                     type="button"
                     data-testid="revert-area-button"
                     onClick={handleRevertArea}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-1 text-xs font-bold text-slate-200 hover:bg-slate-700 transition"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition"
                   >
-                    <span>↩️</span>
+                    <Undo2 className="h-3 w-3" />
                     <span>Revert</span>
                   </button>
                 )}
                 {glareDetected && (
-                  <span className="text-[11px] font-medium text-amber-300">
-                    ☀️ Glare detected
+                  <span className="flex items-center gap-1 text-[11px] font-medium text-amber-300">
+                    <SunMedium className="h-3 w-3" />
+                    <span>Glare detected</span>
                   </span>
                 )}
               </div>
@@ -740,9 +797,12 @@ export default function HomePage() {
             {capturedWaterMask && capturedWaterMask.waterCoveragePct < 0.8 && (
               <div
                 data-testid="preview-no-water-warning"
-                className="rounded-xl border border-amber-500/50 bg-amber-950/40 px-3.5 py-2 text-xs text-amber-200"
+                className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-950/30 px-3.5 py-2 text-xs text-amber-200"
               >
-                ⚠️ <strong>Little surface water detected</strong> ({capturedWaterMask.waterCoveragePct}%). Ensure water is clearly visible inside the frame.
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                <span>
+                  <strong>Little surface water detected</strong> ({capturedWaterMask.waterCoveragePct}%). Ensure water is clearly visible inside the frame.
+                </span>
               </div>
             )}
 
@@ -752,32 +812,35 @@ export default function HomePage() {
                 src={griddedPreviewUrl || rawScreenshotUrl}
                 alt="Selected Water Body Screenshot"
                 data-testid="captured-screenshot-preview"
-                className="max-h-[380px] w-auto rounded-xl border border-slate-700/80 shadow-lg"
+                className="max-h-[380px] w-auto rounded-lg border border-slate-800 shadow-xl"
               />
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-1">
+            <div className="flex items-center justify-end gap-2.5 pt-1">
               <button
                 type="button"
                 onClick={() => setWorkflowStep('map_browse')}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
+                className="rounded-lg border border-slate-700 px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition"
               >
-                ← Back to Map
+                Back to Map
               </button>
               <button
                 type="button"
                 data-testid="initiate-ai-analysis-button"
                 disabled={isAnalyzing}
                 onClick={handleInitiateAiAnalysis}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2 text-sm font-bold text-slate-950 shadow-lg transition hover:bg-emerald-400 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-5 py-2 text-xs sm:text-sm font-bold text-slate-950 shadow transition hover:bg-sky-400 disabled:opacity-50"
               >
                 {isAnalyzing ? (
                   <>
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
                     <span>Analyzing Location...</span>
                   </>
                 ) : (
-                  <span>Analyze Location</span>
+                  <>
+                    <Crosshair className="h-4 w-4" />
+                    <span>Analyze Location</span>
+                  </>
                 )}
               </button>
             </div>
@@ -791,9 +854,9 @@ export default function HomePage() {
           data-testid="user-artifact-view"
           className="fixed top-20 bottom-0 left-0 right-0 z-40 overflow-y-auto bg-slate-950/90 p-4 pt-2 backdrop-blur-md"
         >
-          <div className="mx-auto max-w-6xl rounded-2xl border border-emerald-500/50 bg-slate-900 shadow-2xl overflow-hidden">
+          <div className="mx-auto max-w-6xl rounded-xl border border-sky-500/30 bg-[#0c1520] shadow-2xl overflow-hidden">
             {/* Artifact Sticky Top Header — Buttons Always Anchored in Top Right */}
-            <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900/95 px-5 py-3.5 shadow-md backdrop-blur-md">
+            <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-[#0c1520]/95 px-5 py-3 shadow-md backdrop-blur-md">
               <div className="min-w-0 flex-1 space-y-1">
                 {/* Row 1: Title & Optional Warning Badge */}
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -804,8 +867,9 @@ export default function HomePage() {
                     {currentArtifact.analysis.water_body_name}
                   </h2>
                   {currentArtifact.analysis.has_fishable_water === false && (
-                    <span className="shrink-0 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-bold uppercase text-amber-300">
-                      ⚠️ No Fishable Water Detected
+                    <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-300">
+                      <AlertTriangle className="h-3 w-3 text-amber-400" />
+                      <span>No Fishable Water Detected</span>
                     </span>
                   )}
                 </div>
@@ -816,15 +880,16 @@ export default function HomePage() {
                     {currentArtifact.analysis.region_label}
                   </span>
                   <span className="text-slate-600">·</span>
-                  <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-800 bg-slate-950/80 px-2 py-0.5 text-xs">
+                  <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-800 bg-[#070d14]/80 px-2 py-0.5 text-xs">
                     <a
                       href={googleMapsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       title="Open coordinates in Google Maps"
-                      className="font-mono text-[11px] font-medium text-sky-400 hover:text-sky-300 hover:underline transition"
+                      className="font-mono text-[11px] font-medium text-sky-400 hover:text-sky-300 hover:underline transition flex items-center gap-1"
                     >
-                      📍 {centerLat}, {centerLng}
+                      <MapPin className="h-3 w-3 text-sky-400" />
+                      <span>{centerLat}, {centerLng}</span>
                     </a>
                     <button
                       type="button"
@@ -834,7 +899,7 @@ export default function HomePage() {
                       className="inline-flex items-center gap-1 rounded p-0.5 text-slate-400 hover:bg-slate-800 hover:text-white transition"
                     >
                       {copiedGps ? (
-                        <span className="text-[10px] text-emerald-400 font-bold px-1">✓ Copied!</span>
+                        <span className="text-[10px] text-sky-400 font-bold px-1">✓ Copied!</span>
                       ) : (
                         <svg
                           className="h-3.5 w-3.5 text-slate-400 hover:text-slate-200"
@@ -864,17 +929,19 @@ export default function HomePage() {
                         type="button"
                         data-testid="download-pdf-report-button"
                         onClick={() => downloadOnePageFishingPdfReport(currentArtifact)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-700 hover:text-white transition shadow-sm"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3.5 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-700 hover:text-white transition shadow-sm"
                       >
-                        <span>📄</span> PDF Report
+                        <FileText className="h-3.5 w-3.5 text-slate-300" />
+                        <span>PDF Report</span>
                       </button>
                       <button
                         type="button"
                         data-testid="download-artifact-button"
                         onClick={() => handleDownloadArtifactImage(currentArtifact)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-700 hover:text-white transition shadow-sm"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3.5 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-700 hover:text-white transition shadow-sm"
                       >
-                        <span>🖼️</span> Map PNG
+                        <ImageIcon className="h-3.5 w-3.5 text-slate-300" />
+                        <span>Map PNG</span>
                       </button>
                     </>
                   )}
@@ -884,13 +951,21 @@ export default function HomePage() {
                   onClick={() => setWorkflowStep('map_browse')}
                   className={
                     currentArtifact.analysis.has_fishable_water === false
-                      ? 'inline-flex items-center gap-1.5 rounded-xl bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-amber-300 transition shadow-md'
-                      : 'inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-emerald-400 transition shadow-md shadow-emerald-950/40'
+                      ? 'inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-1.5 text-xs font-bold text-slate-950 hover:bg-amber-400 transition shadow-sm'
+                      : 'inline-flex items-center gap-1.5 rounded-lg bg-sky-500 px-4 py-1.5 text-xs font-bold text-slate-950 hover:bg-sky-400 transition shadow-sm'
                   }
                 >
-                  {currentArtifact.analysis.has_fishable_water === false
-                    ? '← Reposition Map'
-                    : '✨ Analyze Another Location'}
+                  {currentArtifact.analysis.has_fishable_water === false ? (
+                    <>
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>Reposition Map</span>
+                    </>
+                  ) : (
+                    <>
+                      <Crosshair className="h-3.5 w-3.5" />
+                      <span>Analyze Another Location</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -902,7 +977,7 @@ export default function HomePage() {
                 data-testid="no-water-detected-banner"
                 className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-12 items-start"
               >
-                <div className="lg:col-span-5 overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-slate-950 shadow-2xl">
+                <div className="lg:col-span-5 overflow-hidden rounded-xl border border-amber-500/40 bg-[#070d14] shadow-xl">
                   <img
                     src={currentArtifact.annotatedScreenshotDataUrl}
                     alt="Captured Area Without Fishable Water"
@@ -910,15 +985,15 @@ export default function HomePage() {
                     className="w-full h-auto object-contain"
                   />
                 </div>
-                <div className="lg:col-span-7 space-y-4 rounded-2xl border border-amber-500/40 bg-amber-950/25 p-5">
-                  <h3 className="text-lg font-extrabold text-amber-300">
+                <div className="lg:col-span-7 space-y-4 rounded-xl border border-amber-500/40 bg-amber-950/20 p-5">
+                  <h3 className="text-lg font-bold text-amber-300">
                     No Fishable Water Body Found in This Screenshot
                   </h3>
                   <p className="text-sm leading-relaxed text-slate-200">
                     {currentArtifact.analysis.no_water_reason ||
                       currentArtifact.analysis.water_body_summary}
                   </p>
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 text-xs text-slate-300 space-y-1.5">
+                  <div className="rounded-lg border border-slate-800 bg-[#070d14]/80 p-3.5 text-xs text-slate-300 space-y-1.5">
                     <p className="font-bold text-white">Why no spots were placed:</p>
                     <p>
                       To avoid hallucinating fishing spots on forests, hills, or dirt roads, spots and 1-page PDF reports are only generated when an actual river, reservoir, lake, pond, or coastline is verified inside the selected area.
@@ -927,9 +1002,10 @@ export default function HomePage() {
                   <button
                     type="button"
                     onClick={() => setWorkflowStep('map_browse')}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-amber-300 transition"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-amber-400 transition"
                   >
-                    <span>←</span> Reposition Map Over Water
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>Reposition Map Over Water</span>
                   </button>
                 </div>
               </div>
@@ -938,7 +1014,7 @@ export default function HomePage() {
             <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-12">
               {/* Left Column: Annotated Screenshot Artifact + Geography & Spain Regulations Cards */}
               <div className="lg:col-span-5 flex flex-col space-y-3">
-                <div className="overflow-hidden rounded-2xl border-2 border-slate-700 bg-slate-950 shadow-2xl">
+                <div className="overflow-hidden rounded-xl border border-slate-800 bg-[#070d14] shadow-xl">
                   <img
                     src={currentArtifact.annotatedScreenshotDataUrl}
                     alt={`Annotated A1-H8 Grid for ${currentArtifact.analysis.water_body_name}`}
@@ -952,16 +1028,17 @@ export default function HomePage() {
                   currentArtifact.analysis.species_present.length > 0 && (
                     <div
                       data-testid="species-present-card"
-                      className="w-full rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 text-xs space-y-2"
+                      className="w-full rounded-lg border border-slate-800 bg-[#070d14]/60 p-3.5 text-xs space-y-2"
                     >
-                      <h3 className="font-semibold text-slate-200 tracking-wide">
-                        Fish Species Present
+                      <h3 className="font-semibold text-slate-200 tracking-wide flex items-center gap-1.5">
+                        <Fish className="h-3.5 w-3.5 text-sky-400" />
+                        <span>Fish Species Present</span>
                       </h3>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {currentArtifact.analysis.species_present.map((sp) => (
                           <div
                             key={sp.name}
-                            className="rounded-lg border border-slate-800/80 bg-slate-950/60 p-2 space-y-0.5"
+                            className="rounded-md border border-slate-800/80 bg-[#0c1520]/80 p-2 space-y-0.5"
                           >
                             <div className="font-semibold text-slate-100 text-[11px]">
                               {sp.name}
@@ -973,8 +1050,9 @@ export default function HomePage() {
                               <span className="text-slate-500 font-medium">Tactics:</span> {sp.recommended_approach}
                             </p>
                             {sp.regulation_note && (
-                              <p className="text-[10px] text-amber-300/90 font-medium">
-                                ⚖️ {sp.regulation_note}
+                              <p className="text-[10px] text-amber-300 font-medium flex items-center gap-1 mt-0.5">
+                                <Scale className="h-3 w-3 text-amber-400 shrink-0" />
+                                <span>{sp.regulation_note}</span>
                               </p>
                             )}
                           </div>
@@ -987,13 +1065,14 @@ export default function HomePage() {
                 {currentArtifact.analysis.geographical_context && (
                   <div
                     data-testid="geographical-context-card"
-                    className="w-full rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 text-xs space-y-1.5"
+                    className="w-full rounded-lg border border-slate-800 bg-[#070d14]/60 p-3.5 text-xs space-y-1.5"
                   >
                     <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-slate-200 tracking-wide">
-                        Geography &amp; Shore Access
+                      <h3 className="font-semibold text-slate-200 tracking-wide flex items-center gap-1.5">
+                        <Compass className="h-3.5 w-3.5 text-sky-400" />
+                        <span>Geography &amp; Shore Access</span>
                       </h3>
-                      <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-300 border border-slate-700/60">
+                      <span className="rounded bg-slate-800/90 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-300 border border-slate-700/60">
                         {typeof currentArtifact.analysis.geographical_context.water_elevation_m === 'number'
                           ? `~${currentArtifact.analysis.geographical_context.water_elevation_m}m ASL DEM est. (Δ+${currentArtifact.analysis.geographical_context.relief_range_m}m)`
                           : `Elevation: ~Unverified (DEM timeout) (Δ+${currentArtifact.analysis.geographical_context.relief_range_m}m)`}
@@ -1016,10 +1095,11 @@ export default function HomePage() {
                     currentArtifact.analysis.extraction_limitations.length > 0)) && (
                   <div
                     data-testid="imagery-honesty-card"
-                    className="w-full rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 text-xs space-y-1.5"
+                    className="w-full rounded-lg border border-slate-800 bg-[#070d14]/60 p-3.5 text-xs space-y-1.5"
                   >
-                    <h3 className="font-semibold text-slate-200 tracking-wide">
-                      Satellite Resolution &amp; Seasonal Flora Note
+                    <h3 className="font-semibold text-slate-200 tracking-wide flex items-center gap-1.5">
+                      <Info className="h-3.5 w-3.5 text-sky-400" />
+                      <span>Satellite Resolution &amp; Seasonal Flora Note</span>
                     </h3>
                     {currentArtifact.analysis.imagery_freshness_note && (
                       <p className="text-[11px] text-slate-300 leading-relaxed">
@@ -1041,12 +1121,13 @@ export default function HomePage() {
                 {currentArtifact.analysis.restriction_check && (
                   <div
                     data-testid="restriction-check-card"
-                    className="w-full rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 text-xs space-y-2"
+                    className="w-full rounded-lg border border-slate-800 bg-[#070d14]/60 p-3.5 text-xs space-y-2"
                   >
-                    <h3 className="font-semibold text-slate-200 tracking-wide">
-                      Spain Fishing Regulations &amp; Allowed Check
+                    <h3 className="font-semibold text-slate-200 tracking-wide flex items-center gap-1.5">
+                      <Scale className="h-3.5 w-3.5 text-amber-400" />
+                      <span>Spain Fishing Regulations &amp; Allowed Check</span>
                     </h3>
-                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 font-medium text-amber-200 text-[11px]">
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 font-medium text-amber-200 text-[11px]">
                       {currentArtifact.analysis.restriction_check.status_label}
                     </div>
                     <p className="text-[11px] text-slate-300">
@@ -1071,12 +1152,13 @@ export default function HomePage() {
                 )}
               </div>
 
-              {/* Right Column: Tactical Summary (🎯 Where to Fish on the Grid + 🚗 Best Game Plan) */}
-              <div className="lg:col-span-7 space-y-5 max-h-[78vh] overflow-y-auto pr-1">
+              {/* Right Column: Tactical Summary (Where to Fish on the Grid + Best Game Plan) */}
+              <div className="lg:col-span-7 space-y-4 max-h-[78vh] overflow-y-auto pr-1">
                 <div data-testid="where-to-fish-summary" className="space-y-3.5">
                   <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200">
-                      🎯 Where to Fish on the Grid:
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
+                      <Crosshair className="h-4 w-4 text-sky-400" />
+                      <span>Where to Fish on the Grid:</span>
                     </h3>
                     <span className="text-xs text-slate-400 font-mono">
                       {currentArtifact.analysis.recommended_spots.length} Coordinates
@@ -1092,6 +1174,7 @@ export default function HomePage() {
                     const renderCard = (spot: (typeof spots)[0], isTop: boolean) => {
                       const rankStyle = getSpotRankStyle(spot.rank);
                       const accessBadge = formatAccessBadge(spot.access_mode);
+                      const AccessIcon = accessBadge.icon;
                       const cleanTitle = cleanSpotTitle(
                         spot.title,
                         currentArtifact.analysis.water_body_name
@@ -1106,19 +1189,19 @@ export default function HomePage() {
                         <article
                           key={spot.rank}
                           data-testid={`artifact-spot-${spot.rank}`}
-                          className={`group rounded-xl border p-4 transition-all space-y-3 text-xs leading-relaxed ${
+                          className={`group rounded-lg border p-3.5 transition-all space-y-2.5 text-xs leading-relaxed ${
                             isTop
-                              ? 'border-emerald-500/40 bg-gradient-to-br from-slate-900 to-slate-950 hover:border-emerald-400'
-                              : 'border-slate-800/80 bg-slate-900/60 hover:border-slate-700'
+                              ? 'border-sky-500/30 bg-[#070d14]/90 hover:border-sky-400/50'
+                              : 'border-slate-800/80 bg-[#070d14]/60 hover:border-slate-700'
                           }`}
                         >
                           {/* Header: Rank Pill + Title + Coordinate + Target + Access */}
-                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/60 pb-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/60 pb-2">
                             <div className="flex flex-wrap items-center gap-2">
                               <span
                                 className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[11px] font-bold ${rankStyle.pillClasses}`}
                               >
-                                <span className={`h-2 w-2 rounded-full ${rankStyle.dotColor}`} />
+                                <span className={`h-1.5 w-1.5 rounded-full ${rankStyle.dotColor}`} />
                                 Spot {spot.rank}
                               </span>
                               {typeof spot.rating === 'number' && (
@@ -1126,7 +1209,8 @@ export default function HomePage() {
                                   data-testid={`spot-rating-${spot.rank}`}
                                   className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[11px] font-bold text-amber-300"
                                 >
-                                  ★ {spot.rating.toFixed(1)}/10
+                                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                                  <span>{spot.rating.toFixed(1)}/10</span>
                                 </span>
                               )}
                               <h4 className="text-sm font-semibold text-slate-100">
@@ -1138,7 +1222,7 @@ export default function HomePage() {
                             </div>
                             <div className="flex items-center gap-2 text-[11px]">
                               {spot.target_species && spot.target_species.length > 0 && (
-                                <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-950/40 px-2 py-0.5 font-medium text-emerald-300">
+                                <span className="inline-flex items-center gap-1 rounded-md border border-sky-500/30 bg-sky-950/40 px-2 py-0.5 font-medium text-sky-200">
                                   <span className="text-slate-400">Target:</span>{' '}
                                   {spot.target_species.join(', ')}
                                 </span>
@@ -1146,7 +1230,7 @@ export default function HomePage() {
                               <span
                                 className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-medium ${accessBadge.classes}`}
                               >
-                                <span>{accessBadge.icon}</span>
+                                <AccessIcon className="h-3 w-3 shrink-0" />
                                 <span>{accessBadge.label}</span>
                               </span>
                             </div>
@@ -1157,7 +1241,7 @@ export default function HomePage() {
                             data-testid={`spot-justification-${spot.rank}`}
                             className="text-xs text-slate-300 leading-relaxed"
                           >
-                            <strong className="text-emerald-400 font-semibold">
+                            <strong className="text-sky-400 font-semibold">
                               Why this spot:
                             </strong>{' '}
                             {cleanWhy}
@@ -1165,8 +1249,8 @@ export default function HomePage() {
 
                           {/* How to fish / Tactics */}
                           {cleanTactics && (
-                            <div className="rounded-lg border border-slate-800/80 bg-slate-950/60 p-2.5 text-xs text-slate-200 leading-relaxed">
-                              <strong className="text-emerald-400 font-semibold">
+                            <div className="rounded-md border border-slate-800/80 bg-[#0c1520]/80 p-2.5 text-xs text-slate-200 leading-relaxed">
+                              <strong className="text-sky-400 font-semibold">
                                 How to fish:
                               </strong>{' '}
                               {cleanTactics}
@@ -1199,16 +1283,17 @@ export default function HomePage() {
                     };
 
                     return (
-                      <div className="space-y-5">
+                      <div className="space-y-4">
                         {hasTiers ? (
                           <>
                             {/* Tier 1 Header */}
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between border-b border-emerald-500/30 pb-1.5">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                                  <span>🏆</span> Top Recommended Spots (#1–#3)
+                            <div className="space-y-2.5">
+                              <div className="flex items-center justify-between border-b border-amber-500/30 pb-1.5">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                                  <Trophy className="h-3.5 w-3.5 text-amber-400" />
+                                  <span>Top Recommended Spots (#1–#3)</span>
                                 </h4>
-                                <span className="text-[11px] text-emerald-300/80 font-mono">
+                                <span className="text-[11px] text-amber-300/80 font-mono">
                                   High-Percentage Ambush Zones
                                 </span>
                               </div>
@@ -1216,10 +1301,11 @@ export default function HomePage() {
                             </div>
 
                             {/* Tier 2 Header */}
-                            <div className="space-y-3 pt-2">
+                            <div className="space-y-2.5 pt-1">
                               <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                                  <span>📍</span> Secondary &amp; Shoreline Spots (#4–#6)
+                                  <MapPin className="h-3.5 w-3.5 text-sky-400" />
+                                  <span>Secondary &amp; Shoreline Spots (#4–#6)</span>
                                 </h4>
                                 <span className="text-[11px] text-slate-400 font-mono">
                                   Low-Light Roamers &amp; Warm-up Access
@@ -1239,10 +1325,11 @@ export default function HomePage() {
                 {/* Best Game Plan for This Area */}
                 <div
                   data-testid="best-game-plan-summary"
-                  className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-2.5"
+                  className="rounded-lg border border-slate-800 bg-[#070d14]/70 p-4 space-y-2.5"
                 >
-                  <h3 className="text-sm font-semibold text-slate-100 tracking-wide">
-                    🚗 Best Game Plan for This Area:
+                  <h3 className="text-sm font-semibold text-slate-100 tracking-wide flex items-center gap-1.5">
+                    <Navigation className="h-4 w-4 text-sky-400" />
+                    <span>Best Game Plan for This Area:</span>
                   </h3>
                   <ul className="list-disc pl-5 space-y-1.5 text-xs leading-relaxed text-slate-300">
                     {currentArtifact.analysis.best_game_plan.map((step, i) => (
@@ -1258,19 +1345,22 @@ export default function HomePage() {
             {/* Artifact Dedicated Metadata Footer */}
             <footer
               data-testid="artifact-footer"
-              className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 bg-slate-950/40 px-5 py-3.5 text-xs text-slate-400"
+              className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 bg-[#070d14]/90 px-5 py-3 text-xs text-slate-400"
             >
               <div className="flex flex-wrap items-center gap-2.5">
-                <span className="font-mono text-slate-300 bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800">
-                  ID: {reportId}
+                <span className="font-mono text-slate-300 bg-[#0c1520] px-2 py-0.5 rounded border border-slate-800 flex items-center gap-1">
+                  <Hash className="h-3 w-3 text-slate-400" />
+                  <span>ID: {reportId}</span>
                 </span>
-                <span>
-                  📅 {generatedAt}
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3 text-slate-400" />
+                  <span>{generatedAt}</span>
                 </span>
               </div>
               <div className="flex items-center gap-2.5">
-                <span className="font-mono text-sky-400 bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800">
-                  v{currentArtifact.analysis.app_version || APP_VERSION}
+                <span className="font-mono text-sky-400 bg-[#0c1520] px-2 py-0.5 rounded border border-slate-800 flex items-center gap-1">
+                  <ShieldCheck className="h-3 w-3 text-sky-400" />
+                  <span>v{currentArtifact.analysis.app_version || APP_VERSION}</span>
                 </span>
               </div>
             </footer>

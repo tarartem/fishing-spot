@@ -2,9 +2,12 @@
 @import "maplibre-gl/dist/maplibre-gl.css";
 
 :root {
-  --bg-deep: #071318;
-  --bg-panel: #0d1f26;
-  --accent-emerald: #10b981;
+  --bg-deep: #070d14;
+  --bg-panel: #0c1520;
+  --bg-panel-elevated: #111d2c;
+  --accent-cyan: #0ea5e9;
+  --accent-amber: #f59e0b;
+  --border-subtle: #1c2b3d;
 }
 
 body {
@@ -14,4 +17,25 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Precision scrollbar for maritime consoles */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #091018;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1c2b3d;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2b3e55;
 }

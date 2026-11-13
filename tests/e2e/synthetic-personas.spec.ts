@@ -57,13 +57,13 @@ test.describe('Fishing Spot — Synthetic User Personas E2E Testing Suite', () =
 
     // 1. Mateo checks terrain contours to judge steep canyon walls
     await page.getByTestId('map-style-terrain').click();
-    await expect(page.getByTestId('map-style-terrain')).toHaveClass(/bg-sky-500/);
+    await expect(page.getByTestId('map-style-terrain')).toHaveClass(/bg-\[#d96b27\]/);
 
     // 2. Toggles satellite sources: Esri Alt then back to PNOA HD
     await page.getByTestId('satellite-source-esri').click();
-    await expect(page.getByTestId('satellite-source-esri')).toHaveClass(/bg-sky-400/);
+    await expect(page.getByTestId('satellite-source-esri')).toHaveClass(/bg-\[#688a5b\]/);
     await page.getByTestId('satellite-source-pnoa').click();
-    await expect(page.getByTestId('satellite-source-pnoa')).toHaveClass(/bg-sky-400/);
+    await expect(page.getByTestId('satellite-source-pnoa')).toHaveClass(/bg-\[#688a5b\]/);
 
     // 3. Captures framed area for exact sector targeting
     await page.getByTestId('capture-map-area-button').click();

@@ -145,32 +145,32 @@ export function WaterBodyDrawer({
   return (
     <aside
       data-testid="water-body-drawer"
-      className="fixed bottom-0 right-0 z-30 flex max-h-[85vh] w-full flex-col border-t border-slate-800 bg-[#0c1520]/95 shadow-2xl backdrop-blur-xl sm:top-16 sm:bottom-4 sm:right-4 sm:max-h-[calc(100vh-5rem)] sm:w-[460px] sm:rounded-xl sm:border"
+      className="fixed bottom-0 right-0 z-30 flex max-h-[85vh] w-full flex-col border-t border-[#2c3a2f] bg-[#151c16]/95 shadow-2xl backdrop-blur-xl sm:top-16 sm:bottom-4 sm:right-4 sm:max-h-[calc(100vh-5rem)] sm:w-[460px] sm:rounded-xl sm:border text-[#dfd7c8]"
     >
       {/* Header */}
-      <div className="flex items-start justify-between border-b border-slate-800/80 p-4">
+      <div className="flex items-start justify-between border-b border-[#2c3a2f]/80 p-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold uppercase text-sky-300">
+            <span className="rounded bg-[#1c251e] border border-[#2c3a2f] px-2 py-0.5 text-[11px] font-bold uppercase text-[#dfd7c8]">
               {waterBody.countryCode} · {waterBody.waterType === 'sea' ? 'Sea / Coastal' : 'Freshwater'}
             </span>
-            <span className="text-xs font-semibold text-amber-400">
+            <span className="text-xs font-semibold text-[#d96b27]">
               ★ {waterBody.avgRating.toFixed(1)} ({waterBody.reviewCount} reviews)
             </span>
           </div>
           <h2
             data-testid="drawer-water-body-name"
-            className="mt-1 text-lg font-bold text-white"
+            className="mt-1 text-lg font-bold text-[#dfd7c8]"
           >
             {waterBody.name}
           </h2>
-          <p className="text-xs text-slate-400">{waterBody.regionLabel}</p>
+          <p className="text-xs text-[#918b80]">{waterBody.regionLabel}</p>
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close water body panel"
-          className="rounded-lg border border-slate-800 p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+          className="rounded-lg border border-[#2c3a2f] p-1.5 text-[#918b80] hover:bg-[#1c251e] hover:text-[#dfd7c8]"
         >
           ✕
         </button>
@@ -181,18 +181,18 @@ export function WaterBodyDrawer({
         {/* Basic Water Body Description (Visible to both Guest & Registered) */}
         <section
           data-testid="water-body-basic-description"
-          className="rounded-xl border border-slate-800/90 bg-slate-900/60 p-3.5"
+          className="rounded-xl border border-[#2c3a2f] bg-[#0e130f]/80 p-3.5"
         >
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[#918b80]">
             Water Body Overview
           </h3>
-          <p className="mt-1.5 text-xs leading-relaxed text-slate-200">
+          <p className="mt-1.5 text-xs leading-relaxed text-[#dfd7c8]/90">
             {waterBody.description}
           </p>
 
           {/* What Fish You Can Catch Here */}
           <div className="mt-3">
-            <p className="text-[11px] font-semibold text-slate-400">
+            <p className="text-[11px] font-semibold text-[#dfd7c8]">
               What Fish You Can Catch Here:
             </p>
             <div
@@ -202,7 +202,7 @@ export function WaterBodyDrawer({
               {waterBody.commonSpecies.map((species) => (
                 <span
                   key={species}
-                  className="rounded-md border border-emerald-500/30 bg-emerald-950/60 px-2.5 py-0.5 text-[11px] font-medium capitalize text-sky-300"
+                  className="rounded-md border border-[#688a5b]/40 bg-[#1c251e] px-2.5 py-0.5 text-[11px] font-medium capitalize text-[#dfd7c8]"
                 >
                   {species.replace(/_/g, ' ')}
                 </span>

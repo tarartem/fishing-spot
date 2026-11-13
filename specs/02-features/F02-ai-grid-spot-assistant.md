@@ -75,39 +75,43 @@
 5. **Fishing Restrictions & Regulatory Lookup**:
    - Retains multi-source Spain checks (curated DB + Wikipedia/OSM protected reserves + dam/power-plant 100m exclusion buffers + Autonomous Community license & *Real Decreto 630/2013* invasive species laws).
 
-6. **Professional Minimalist Report UI & 1-Page PDF Export ("Multiple X's" Stacking Rationale)**:
-   - **Main Screen Brand Identity**:
-     - Main top header title is **Fishing Spot** (without country restriction).
-     - Displays the clear value proposition directly below the logo: *"Find top fishing spots using satellite & terrain data"*.
+6. **Professional Minimalist Report UI & 1-Page PDF Export — Tactical Angler (Verhunt Field Edition)**:
+   - **Main Screen Brand Identity & Angler First Impression**:
+     - Main top header title is **FISHING SPOT** with a high-vis Caldero rust `Fish` vector badge and clear tactical subtitle: *"TACTICAL RECON · HYDROGRAPHIC SPOT FINDER"*.
+     - Header includes quick tactical angler status pills with Lucide vector icons (`Waves`, `Fish`, `Compass` — zero raw Unicode emojis): `[ Shore & Boat Recon ]`, `[ Multi-Species ]`.
      - Global search input allows finding any lake, river, town, or direct GPS coordinates worldwide.
-     - Header includes the **"My spots (N) ▾"** dropdown button (with Lucide `Bookmark` or `MapPin` icon), which displays the count of saved reports and reveals a scrollable list of previous analyses with water body name, hotspot count, and relative timestamp.
-   - **Map Landing & Selection Preview (Marine Navionics & Chartplotter Pro Theme)**:
-     - Concise reticle hint (`Frame your fishing area`) with tactical corner brackets (`┌ ┐ / └ ┘`) and single floating primary nautical amber CTA `Select This Area` (with Lucide `Crosshair` icon) without surrounding dark wrapper box.
-     - Streamlined Selection Preview modal: segmented imagery selector (`PNOA HD` | `Esri World` | `Terrain` with Lucide `Satellite`, `Layers`, `Mountain` icons), smart scale classification (`Optimal` / `Too tight` / `Wide area`), and 1-click `Optimize Area` (Lucide `Sparkles`) + `Revert` (Lucide `Undo2`) controls.
-   - **Preparation State (Single-Feature Sequential Stepper)**: While analysis runs, a dedicated dialog demonstrates **1 concise capability at a time** across all 6 checkpoints sequentially with:
-     - Header title dynamically displaying the target water body: `Analyzing {Name}` (e.g., `Analyzing Embalse de Cortes`, falling back to `Analyzing Selected Basin`).
-     - Fixed description container height to guarantee zero vertical layout jitter between 1-line and 2-line step descriptions.
+     - Header includes the **"My spots (N) ▾"** dropdown button (with Lucide `Bookmark` vector icon), displaying saved reports and revealing previous water analyses with hotspot counts and relative timestamps.
+   - **Map Landing & Selection Preview (Verhunt Field Edition)**:
+     - Concise reticle hint (`Frame your fishing area · Aim at bays, points & weed edges`) with tactical corner brackets (`┌ ┐ / └ ┘`) in heavy anodized olive (`#2c3a2f`) and single floating primary Verhunt Caldero CTA `SCAN FISHING WATERS` (with Lucide `Crosshair` or `Scan` icon, `#d96b27` blaze rust styling) without surrounding dark wrapper box.
+     - Streamlined Selection Preview modal: segmented imagery selector (`PNOA HD` | `Esri World` | `Terrain` with Lucide `Satellite`, `Layers`, `Mountain` icons), smart scale classification (`Optimal` / `Too tight` / `Wide area`), fixed ~35m casting arc reference scale, and 1-click `Optimize Area` (Lucide `Sparkles`) + `Revert` (Lucide `Undo2`) controls.
+   - **Preparation State (Single-Feature Sequential Stepper)**: While analysis runs, a dedicated dialog demonstrates **1 concise capability at a time** across all 6 checkpoints sequentially in authentic field guide scouting language:
+     - 1: `Scanning water boundary & permanent reservoir contours...`
+     - 2: `Overlaying 100m tactical casting grid & bathymetry sectors...`
+     - 3: `Querying local fish species roster (Bass, Pike, Zander, Carp, Barbel)...`
+     - 4: `Analyzing bank gradient, track surfaces & shore approaches...` (compliant terminology protecting against Spanish *Ley de Montes* vehicle off-road violations).
+     - 5: `Verifying Spanish regional fishing permits & restricted zones...`
+     - 6: `Pinpointing top trophy spots & generating tactical game plan...`
      - Precision vector icons from Lucide (`Scan`, `Layers`, `Fish`, `Footprints`, `Scale`, `Crosshair`) replacing raw emojis.
    - **Sticky Analysis Header & Ordered 2-Row Layout (Zero Height Jitter)**:
-     - The artifact header is sticky (`sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md`) with two dedicated, ordered rows:
-       - **Row 1 (Title)**: `<h2>` Title (e.g., `Vallequillas (Sector)`). If no fishable water exists, shows a `No Fishable Water Detected` badge beside the title. Developer status chip is removed.
-       - **Row 2 (Subtitle & GPS)**: Subtitle `region_label` (e.g. `San Martín de la Vega, Community of Madrid, Spain`) followed by `·` and GPS coordinates pill with a standard 2-rectangles clipboard SVG copy button.
+     - The artifact header is sticky (`sticky top-0 z-30 bg-[#151c16]/95 backdrop-blur-md border-b border-[#2c3a2f]`) with two dedicated, ordered rows:
+       - **Row 1 (Title)**: `<h2>` Title (e.g., `Vallequillas (Sector)`). If no fishable water exists, shows a `No Fishable Water Detected` badge beside the title.
+       - **Row 2 (Subtitle & GPS)**: Subtitle `region_label` followed by `·` and GPS coordinates pill with a standard 2-rectangles clipboard SVG copy button.
      - **Top-Right Action Buttons**:
-       - `[ PDF Report ]` (Secondary action: slate surface with Lucide `FileText` icon)
-       - `[ Map PNG ]` (Secondary action: slate surface with Lucide `Image` icon)
-       - `[ Analyze Another Location ]` (Primary CTA: oceanic sky/amber with Lucide `Compass` icon, clearly signaling ability to start a new analysis) or `[ Reposition Map Over Water ]` if no fishable water exists.
+       - `[ PDF Report ]` (Secondary action: olive card surface with Lucide `FileText` icon)
+       - `[ Map PNG ]` (Secondary action: olive card surface with Lucide `Image` icon)
+       - `[ Analyze Another Location ]` (Primary CTA: Verhunt Caldero `#d96b27` with Lucide `Compass` icon) or `[ Reposition Map Over Water ]` if no fishable water exists.
    - **Removal of Redundant "Spot Rank & Structure Legend"**:
      - Eliminates the confusing and redundant legend card under the map screenshot, elevating **Fish Species Present**, **Hydrographic Conditions**, and **Fishing Regulations** cards by ~75px so they are immediately visible without vertical scrolling.
-   - **Water Body & Fish Species Card**: Name, region, altitude/scale, and structured **Fish Species Present** in English.
-   - **Scannable Minimalist Spot Cards (`1–6`) with Stacking Rationale**:
-     - Clean semantic rank indicator: **Gold/Amber** (`#f59e0b` / `#fbbf24`) for Spots 1–2 (Prime/Trophy waypoints), **Sky/Cyan** (`#0ea5e9` / `#38bdf8`) for Spots 3–4 (Sheltered/Accessible), and **Slate/Amber** for Spots 5–6 (Secondary/Bottlenecks).
-     - Grid cell coordinate in monospace (e.g. `[C4]`), Title, and subtle access badge with Lucide transport icons (`Car`, `Truck`, `Sailboat`, `Footprints`).
+   - **Water Body & Fish Species Card**: Name, region, altitude/scale, and structured **Fish Species Present** in English with feeding depths and recommended rigs.
+   - **Scannable Field Dossier Spot Cards (`1–6`)**:
+     - Clean semantic rank indicator: **Verhunt Caldero Rust** (`#d96b27`) for Spots 1–2 (Prime Trophy waypoints), **Lichen / Reeds Olive** (`#688a5b`) for Spots 3–4 (Sheltered Holding Zones), and **Slate Olive** (`#2c3a2f`) for Spots 5–6 (Secondary Corridors).
+     - Grid cell coordinate in monospace (e.g. `[C4]`), Title, and compliant access badge with Lucide transport icons (`Car`, `Truck`, `Sailboat`, `Footprints`) using `Vehicle Tracks & Footpaths` / `Shore Approach & Bank Access` phrasing.
      - Structured key-values (`Target Species`, `Depth / Structure`) and subtle neutral `influencing_features` tags.
      - Compact tactical approach & technique notes without visual clutter or nested boxes.
-   - **Practical Access & Game Plan (`best_game_plan`)**: Ordered parking/road → walking → fishing route.
-   - **Spain Regulations Card**: Concise status/permit/exclusion summary verifying whether fishing is allowed (the only place where Spanish legal/permit terms appear).
+   - **Practical Access & Tactical Master Plan (`best_game_plan`)**: Ordered parking/road approach → footpath route → bank casting advice.
+   - **Spain Regulations Card**: Concise status/permit/exclusion summary verifying whether fishing is allowed.
    - **Dedicated Minimalist Metadata Footer**:
-     - Strips developer noise (removes internal PNG filename `📁 fishing-spot-grid-...` and attribution string `AI Hydrographic Intelligence · IGN PNOA, Esri & OpenStreetMap`).
+     - Clean warm khaki and weathered earth topo styling without internal PNG filename clutter.
      - Displays clean, purposeful metadata:
        - Report ID (`ID: FS-xxx`)
        - Generated timestamp (`📅 {date}`)

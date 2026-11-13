@@ -2,17 +2,21 @@
 @import "maplibre-gl/dist/maplibre-gl.css";
 
 :root {
-  --bg-deep: #070d14;
-  --bg-panel: #0c1520;
-  --bg-panel-elevated: #111d2c;
-  --accent-cyan: #0ea5e9;
-  --accent-amber: #f59e0b;
-  --border-subtle: #1c2b3d;
+  --bg-deep: #0e130f;
+  --bg-panel: #151c16;
+  --bg-panel-elevated: #1c251e;
+  --accent-caldero: #d96b27;
+  --accent-caldero-hover: #c2571a;
+  --accent-structure: #688a5b;
+  --border-subtle: #2c3a2f;
+  --border-strong: #3d4f40;
+  --text-khaki: #dfd7c8;
+  --text-muted: #918b80;
 }
 
 body {
   background-color: var(--bg-deep);
-  color: #f1f5f9;
+  color: var(--text-khaki);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   margin: 0;
   padding: 0;
@@ -21,21 +25,21 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Precision scrollbar for maritime consoles */
+/* Precision scrollbar for tactical field consoles */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #091018;
+  background: #0e130f;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1c2b3d;
+  background: #2c3a2f;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2b3e55;
+  background: #3d4f40;
 }

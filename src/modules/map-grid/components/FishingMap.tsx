@@ -284,7 +284,7 @@ export function FishingMap({
   };
 
   return (
-    <div className="relative h-full w-full select-none bg-[#070d14]">
+    <div className="relative h-full w-full select-none bg-[#0e130f]">
       {/* MapLibre GL JS Canvas */}
       <div
         ref={mapContainerRef}
@@ -297,21 +297,27 @@ export function FishingMap({
         <div
           ref={reticleRef}
           data-testid="target-reticle-box"
-          className="relative h-[64vh] w-[64vh] max-w-[85vw] max-h-[65vw] rounded-lg border border-sky-400/20 shadow-[0_0_0_9999px_rgba(4,10,18,0.35)] flex flex-col justify-end p-3"
+          className="relative h-[64vh] w-[64vh] max-w-[85vw] max-h-[65vw] rounded-lg border border-[#688a5b]/25 shadow-[0_0_0_9999px_rgba(10,15,11,0.40)] flex flex-col justify-between p-3"
         >
-          {/* Tactical Viewfinder Corner Brackets */}
-          <span className="absolute top-0 left-0 h-4 w-4 border-t-2 border-l-2 border-sky-400/80 rounded-tl-sm" />
-          <span className="absolute top-0 right-0 h-4 w-4 border-t-2 border-r-2 border-sky-400/80 rounded-tr-sm" />
-          <span className="absolute bottom-0 left-0 h-4 w-4 border-b-2 border-l-2 border-sky-400/80 rounded-bl-sm" />
-          <span className="absolute bottom-0 right-0 h-4 w-4 border-b-2 border-r-2 border-sky-400/80 rounded-br-sm" />
+          {/* Tactical Viewfinder Corner Brackets in Verhunt Caldero Rust */}
+          <span className="absolute top-0 left-0 h-4 w-4 border-t-2 border-l-2 border-[#d96b27] rounded-tl-sm" />
+          <span className="absolute top-0 right-0 h-4 w-4 border-t-2 border-r-2 border-[#d96b27] rounded-tr-sm" />
+          <span className="absolute bottom-0 left-0 h-4 w-4 border-b-2 border-l-2 border-[#d96b27] rounded-bl-sm" />
+          <span className="absolute bottom-0 right-0 h-4 w-4 border-b-2 border-r-2 border-[#d96b27] rounded-br-sm" />
+
+          {/* Top Inscription: Tactical Hydro-Scan Reticle */}
+          <div className="text-[10px] font-mono tracking-wider uppercase text-[#dfd7c8]/90 bg-[#151c16]/90 border border-[#2c3a2f] px-2.5 py-0.5 rounded self-center text-center shadow-lg backdrop-blur-sm">
+            HYDRO-SCAN RETICLE · 100M GRID
+          </div>
 
           {/* Center Crosshair Tick Marker */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="h-2 w-2 rounded-full border border-sky-400/25" />
+            <div className="h-2 w-2 rounded-full border border-[#d96b27]/40" />
           </div>
 
-          <div className="text-[11px] font-mono tracking-wider text-sky-200/90 bg-[#0c1520]/85 border border-sky-500/20 px-3 py-0.5 rounded self-center text-center shadow-lg backdrop-blur-sm">
-            Frame your fishing area
+          {/* Bottom Inscription: Structure Hint */}
+          <div className="text-[10px] font-mono tracking-wider text-[#918b80] bg-[#151c16]/90 border border-[#2c3a2f] px-2.5 py-0.5 rounded self-center text-center shadow-lg backdrop-blur-sm">
+            Aim at bays, points & weed edges
           </div>
         </div>
       </div>
@@ -322,7 +328,7 @@ export function FishingMap({
         <div className="flex flex-wrap items-center gap-2">
           <div
             data-testid="map-style-switcher"
-            className="pointer-events-auto inline-flex items-center rounded-lg border border-slate-700/80 bg-[#0c1520]/90 p-0.5 shadow-xl backdrop-blur-md"
+            className="pointer-events-auto inline-flex items-center rounded-lg border border-[#2c3a2f] bg-[#151c16]/90 p-0.5 shadow-xl backdrop-blur-md"
           >
             {(
               [
@@ -340,8 +346,8 @@ export function FishingMap({
                   onClick={() => onChangeMapStyle(mode.id)}
                   className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition ${
                     isActive
-                      ? 'bg-sky-500 text-slate-950 shadow-sm font-bold'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      ? 'bg-[#d96b27] text-stone-950 shadow-sm font-bold'
+                      : 'text-[#dfd7c8]/80 hover:bg-[#1c251e] hover:text-[#dfd7c8]'
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -353,10 +359,10 @@ export function FishingMap({
 
           <div
             data-testid="satellite-source-switcher"
-            className="pointer-events-auto inline-flex items-center gap-1 rounded-lg border border-slate-700/80 bg-[#0c1520]/90 p-0.5 shadow-xl backdrop-blur-md"
+            className="pointer-events-auto inline-flex items-center gap-1 rounded-lg border border-[#2c3a2f] bg-[#151c16]/90 p-0.5 shadow-xl backdrop-blur-md"
             title="Switch satellite flight imagery to reduce sun glare or view different water levels"
           >
-            <span className="px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span className="px-2 text-[10px] font-semibold uppercase tracking-wider text-[#918b80]">
               Imagery:
             </span>
             {(
@@ -378,8 +384,8 @@ export function FishingMap({
                   }}
                   className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
                     isActive
-                      ? 'bg-sky-400 text-slate-950 shadow-sm font-bold'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      ? 'bg-[#688a5b] text-stone-950 shadow-sm font-bold'
+                      : 'text-[#dfd7c8]/80 hover:bg-[#1c251e] hover:text-[#dfd7c8]'
                   }`}
                 >
                   <Icon className="h-3 w-3" />
@@ -390,15 +396,15 @@ export function FishingMap({
           </div>
         </div>
 
-        {/* Bottom Center Floating Primary CTA: High-Vis Nautical Amber */}
+        {/* Bottom Center Floating Primary CTA: High-Vis Verhunt Caldero Rust */}
         <button
           type="button"
           data-testid="capture-map-area-button"
           onClick={triggerScreenshotCapture}
-          className="pointer-events-auto mb-3 flex items-center gap-2 self-center rounded-lg bg-amber-500 px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-950 shadow-xl shadow-amber-950/60 border border-amber-400/40 backdrop-blur-md transition hover:bg-amber-400 hover:shadow-amber-500/20 active:scale-95"
+          className="pointer-events-auto mb-3 flex items-center gap-2 self-center rounded-lg bg-[#d96b27] hover:bg-[#c2571a] active:bg-[#a84713] px-5 py-2.5 text-xs sm:text-sm font-bold text-stone-950 shadow-xl shadow-stone-950/70 border border-[#ea7c3a]/50 backdrop-blur-md transition active:scale-95"
         >
           <Crosshair className="h-4 w-4 stroke-[2.5]" />
-          <span className="tracking-wide">Select This Area</span>
+          <span className="tracking-wide">SCAN FISHING WATERS</span>
         </button>
       </div>
 
@@ -406,9 +412,9 @@ export function FishingMap({
       {showTerrainMaxZoomToast && mapStyle === 'terrain' && (
         <div
           data-testid="terrain-max-zoom-toast"
-          className="pointer-events-none absolute top-20 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-[#0c1520]/95 px-3.5 py-1.5 text-xs font-semibold text-amber-200 shadow-2xl backdrop-blur-md"
+          className="pointer-events-none absolute top-20 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-lg border border-[#d96b27]/40 bg-[#151c16]/95 px-3.5 py-1.5 text-xs font-semibold text-[#dfd7c8] shadow-2xl backdrop-blur-md"
         >
-          <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+          <AlertTriangle className="h-3.5 w-3.5 text-[#d96b27] shrink-0" />
           <span>Maximum terrain detail reached · Switch to Satellite for closer zoom</span>
         </div>
       )}

@@ -69,11 +69,14 @@
 
 6. **Professional Minimalist Report UI & 1-Page PDF Export ("Multiple X's" Stacking Rationale)**:
    - **Main Screen Brand Identity**:
-     - Main top header displays the clear value proposition directly below the logo: *"Locate exact fishing spots with satellite AI, terrain & regulations"*.
+     - Main top header displays the clear value proposition directly below the logo: *"Find top fishing spots using satellite & terrain data"*.
+     - Header includes the **"My spots (N) ▾"** dropdown button, which displays the count of saved reports and reveals a scrollable list of previous analyses with water body name, hotspot count, and relative timestamp.
    - **Map Landing & Selection Preview**:
-     - Concise reticle hint (`Frame your fishing area`) and single primary emerald CTA `📸 Capture Framed Area` (Draw Custom Area removed).
-     - Streamlined Selection Preview modal: segmented imagery selector (`PNOA HD (Spain)` | `Esri World`) and scale summary.
-   - **Preparation State (Single-Feature Sequential Stepper)**: While analysis runs, a dedicated dialog demonstrates **1 concise capability at a time** across all 6 checkpoints (water boundary scan, bottom structure, angler ecology, shore & road access, regulations check, tactical synthesis) sequentially and independently of backend speed so every capability is clearly visible.
+     - Concise reticle hint (`Frame your fishing area`) and single floating primary emerald CTA `🎯 Select This Area` without surrounding dark wrapper box.
+     - Streamlined Selection Preview modal: segmented imagery selector (`PNOA HD` | `Esri World` | `Terrain`), smart scale classification (`Optimal` / `Too tight` / `Wide area`), and 1-click `✨ Optimize Area` + `↩️ Revert` controls.
+   - **Preparation State (Single-Feature Sequential Stepper)**: While analysis runs, a dedicated dialog demonstrates **1 concise capability at a time** across all 6 checkpoints sequentially with:
+     - Header title dynamically displaying the target water body: `Analyzing {Name}` (e.g., `Analyzing Embalse de Cortes`, falling back to `Analyzing Selected Basin`).
+     - Fixed description container height to guarantee zero vertical layout jitter between 1-line and 2-line step descriptions.
    - **Sticky Analysis Header & Top-Right Action Group**:
      - The artifact header is sticky (`sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md`) so action buttons remain visible and clickable regardless of how far the angler scrolls through the spots.
      - **Top-Right Action Buttons**:

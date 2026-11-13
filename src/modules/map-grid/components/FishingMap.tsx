@@ -37,6 +37,7 @@ function getMapStyleConfig(
           type: 'raster',
           tiles: ['https://tile.opentopomap.org/{z}/{x}/{y}.png'],
           tileSize: 256,
+          maxzoom: 17,
           attribution: '© OpenTopoMap (CC-BY-SA)',
         },
       },
@@ -46,7 +47,6 @@ function getMapStyleConfig(
           type: 'raster',
           source: 'opentopo',
           minzoom: 0,
-          maxzoom: 17,
         },
       ],
     };
@@ -115,6 +115,8 @@ export function FishingMap({
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const reticleRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const [showTerrainMaxZoomToast, setShowTerrainMaxZoomToast] =
+    useState<boolean>(false);
 
   // Initialize MapLibre GL JS centered in Spain (Embalse de Cortes, Valencia) with preserveDrawingBuffer: true
   useEffect(() => {
@@ -126,6 +128,7 @@ export function FishingMap({
         style: getMapStyleConfig(mapStyle, satelliteSource),
         center: [-0.935, 39.248], // Embalse de Cortes main reservoir basin (Valencia, Spain)
         zoom: 13.4,
+        maxZoom: mapStyle === 'terrain' ? 17.2 : 20,
         canvasContextAttributes: { preserveDrawingBuffer: true },
         attributionControl: false,
       });
@@ -148,15 +151,51 @@ export function FishingMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switch between Satellite (PNOA / Esri) and Terrain map styles
+  // Switch between Satellite (PNOA / Esri) and Terrain map styles + dynamic max zoom limits
   useEffect(() => {
-    if (!mapRef.current) return;
+    const map = mapRef.current;
+    if (!map) return;
     try {
-      mapRef.current.setStyle(getMapStyleConfig(mapStyle, satelliteSource));
+      map.setStyle(getMapStyleConfig(mapStyle, satelliteSource));
+      if (mapStyle === 'terrain') {
+        map.setMaxZoom(17.2);
+        if (map.getZoom() > 17.2) {
+          map.setZoom(17.2);
+        }
+      } else {
+        map.setMaxZoom(20);
+        setShowTerrainMaxZoomToast(false);
+      }
     } catch {
       // Ignore in headless environment
     }
   }, [mapStyle, satelliteSource]);
+
+  // Monitor terrain zoom level to advise angler when maximum detail is reached
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const checkTerrainZoom = () => {
+      try {
+        const currentZoom = map.getZoom();
+        if (mapStyle === 'terrain' && currentZoom >= 16.8) {
+          setShowTerrainMaxZoomToast(true);
+        } else {
+          setShowTerrainMaxZoomToast(false);
+        }
+      } catch {
+        // Ignore
+      }
+    };
+
+    map.on('zoom', checkTerrainZoom);
+    checkTerrainZoom();
+
+    return () => {
+      map.off('zoom', checkTerrainZoom);
+    };
+  }, [mapStyle]);
 
   // Fly to searched location in Spain when user selects a search result
   useEffect(() => {
@@ -322,19 +361,28 @@ export function FishingMap({
           </div>
         </div>
 
-        {/* Bottom Center Action Bar: Primary Capture */}
-        <div className="pointer-events-auto mb-2 flex items-center justify-center self-center rounded-2xl border border-slate-800/90 bg-slate-950/90 px-4 py-3 shadow-2xl backdrop-blur-xl">
-          <button
-            type="button"
-            data-testid="capture-map-area-button"
-            onClick={triggerScreenshotCapture}
-            className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-slate-950 shadow-lg transition hover:bg-emerald-400"
-          >
-            <span>📸</span>
-            <span>Capture Framed Area</span>
-          </button>
-        </div>
+        {/* Bottom Center Floating Primary CTA: Select This Area */}
+        <button
+          type="button"
+          data-testid="capture-map-area-button"
+          onClick={triggerScreenshotCapture}
+          className="pointer-events-auto mb-3 flex items-center gap-2.5 self-center rounded-2xl bg-emerald-500 px-6 py-3 text-sm font-bold text-slate-950 shadow-2xl shadow-emerald-950/70 backdrop-blur-md transition hover:bg-emerald-400 hover:scale-105 active:scale-95"
+        >
+          <span className="text-base">🎯</span>
+          <span>Select This Area</span>
+        </button>
       </div>
+
+      {/* Maximum Terrain Zoom Notice Toast */}
+      {showTerrainMaxZoomToast && mapStyle === 'terrain' && (
+        <div
+          data-testid="terrain-max-zoom-toast"
+          className="pointer-events-none absolute top-20 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-xl border border-amber-500/40 bg-slate-950/90 px-4 py-2 text-xs font-semibold text-amber-200 shadow-2xl backdrop-blur-md"
+        >
+          <span>⛰️</span>
+          <span>Maximum terrain detail reached · Switch to Satellite for closer zoom</span>
+        </div>
+      )}
     </div>
   );
 }

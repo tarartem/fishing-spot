@@ -116,9 +116,8 @@ test.describe('Fishing Spot — Synthetic User Personas E2E Testing Suite', () =
     await expect(restrictionCard).toContainText('Permits:');
     await expect(restrictionCard).toContainText('Restricted / Safety Zones:');
 
-    // 3. Verifies first artifact saved in session gallery
-    const artifactsList = page.getByTestId('my-artifacts-list');
-    await expect(artifactsList).toContainText('Saved (1)');
+    // 3. Verifies first artifact saved under My spots
+    await expect(page.getByTestId('my-spots-dropdown-button')).toContainText('My spots (1)');
 
     // 4. Returns to map to plan the next leg of her trip
     await page.getByTestId('artifact-back-to-map-button').click();
@@ -137,8 +136,9 @@ test.describe('Fishing Spot — Synthetic User Personas E2E Testing Suite', () =
     await page.getByTestId('initiate-ai-analysis-button').click();
     await expect(page.getByTestId('user-artifact-view')).toBeVisible({ timeout: 35000 });
 
-    // 7. Verifies gallery updated to 2 saved artifacts
-    await expect(artifactsList).toContainText('Saved (2)');
+    // 7. Verifies gallery updated to 2 saved artifacts and opens dropdown
+    await expect(page.getByTestId('my-spots-dropdown-button')).toContainText('My spots (2)');
+    await page.getByTestId('my-spots-dropdown-button').click();
     await expect(page.getByTestId('saved-artifact-chip-0')).toBeVisible();
     await expect(page.getByTestId('saved-artifact-chip-1')).toBeVisible();
 

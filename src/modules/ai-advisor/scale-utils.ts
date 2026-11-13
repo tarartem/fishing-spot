@@ -152,9 +152,38 @@ export function getAllowedFeaturesForScale(
   return ALL_ANGLER_FEATURE_KEYS;
 }
 
+export type SmartScaleTier = 'optimal' | 'too_tight' | 'wide';
+
+export interface SmartScaleEvaluation {
+  tier: SmartScaleTier;
+  badgeLabel: string;
+  explanation: string;
+  canOptimize: boolean;
+}
+
+/**
+ * Computes an optimal tactical bounding box (~1.0 km span) centered on the given bbox.
+ */
+export function getOptimalBbox(currentBbox: BoundingBox, targetSpanKm = 1.0): BoundingBox {
+  const [minLng, minLat, maxLng, maxLat] = currentBbox;
+  const centerLng = (minLng + maxLng) / 2;
+  const centerLat = (minLat + maxLat) / 2;
+  const centerLatRad = (centerLat * Math.PI) / 180;
+
+  const halfLatDeg = (targetSpanKm / 2) / 111.32;
+  const halfLngDeg = (targetSpanKm / 2) / (111.32 * Math.cos(centerLatRad));
+
+  return [
+    Number((centerLng - halfLngDeg).toFixed(6)),
+    Number((centerLat - halfLatDeg).toFixed(6)),
+    Number((centerLng + halfLngDeg).toFixed(6)),
+    Number((centerLat + halfLatDeg).toFixed(6)),
+  ];
+}
+
 /**
  * Computes physical span (km), ground resolution (m/px on 1024px output),
- * and optimal feature-extraction scale tier (0.30-1.50 km ideal for all 12 features).
+ * and optimal feature-extraction scale tier (0.35-1.80 km ideal for all 12 features).
  */
 export function computeSelectionScale(bbox: BoundingBox): {
   widthKm: number;
@@ -166,6 +195,7 @@ export function computeSelectionScale(bbox: BoundingBox): {
   isOverZoomed: boolean;
   isOptimalScale: boolean;
   scaleAdvice: string;
+  smartScale: SmartScaleEvaluation;
 } {
   const [minLng, minLat, maxLng, maxLat] = bbox;
   const centerLatRad = (((minLat + maxLat) / 2) * Math.PI) / 180;
@@ -176,28 +206,55 @@ export function computeSelectionScale(bbox: BoundingBox): {
   );
   const maxSpanKm = Math.max(widthKm, heightKm);
   const metersPerPixel = Number(((maxSpanKm * 1000) / 1024).toFixed(2));
-  const isOverZoomed = maxSpanKm < 0.3;
-  const isOptimalScale = maxSpanKm >= 0.3 && maxSpanKm <= 1.5;
+  const isOverZoomed = maxSpanKm < 0.35;
+  const isOptimalScale = maxSpanKm >= 0.35 && maxSpanKm <= 1.8;
+
+  let smartScale: SmartScaleEvaluation;
+  if (isOverZoomed) {
+    smartScale = {
+      tier: 'too_tight',
+      badgeLabel: 'Too tight',
+      explanation:
+        'Zoomed in too close — surrounding terrain, road approaches, and overall water structure are cut off.',
+      canOptimize: true,
+    };
+  } else if (maxSpanKm > 1.8) {
+    smartScale = {
+      tier: 'wide',
+      badgeLabel: 'Wide area',
+      explanation:
+        'Area is too wide — fine structures like weed lines, brush cover, and shallow drop-offs cannot be resolved.',
+      canOptimize: true,
+    };
+  } else {
+    smartScale = {
+      tier: 'optimal',
+      badgeLabel: 'Optimal',
+      explanation:
+        'Ideal scale for analyzing shoreline points, weed edges, drop-offs, and bottom structure.',
+      canOptimize: false,
+    };
+  }
 
   let scaleMode: ScaleAnalysisMode = 'micro';
   let scaleLabel = `Optimal Feature Scale (${widthKm.toFixed(1)} km × ${heightKm.toFixed(1)} km · ~${metersPerPixel} m/px)`;
   let scaleAdvice =
-    'Optimal 0.3–1.5 km tactical scale: high enough resolution to inspect weed edges, shadows, cover, drop-offs, and shoreline points.';
+    'Optimal 0.35–1.8 km tactical scale: high enough resolution to inspect weed edges, shadows, cover, drop-offs, and shoreline points.';
 
   if (isOverZoomed) {
     scaleLabel = `Over-Zoomed Detail (${widthKm.toFixed(2)} km × ${heightKm.toFixed(2)} km · ~${metersPerPixel} m/px)`;
     scaleAdvice =
-      'Very tight zoom (<0.3 km): road approaches may fall outside frame. Zoom out slightly (0.4–1.5 km) for fuller context.';
+      'Very tight zoom (<0.35 km): road approaches may fall outside frame. Zoom out slightly for fuller context.';
   } else if (maxSpanKm > 5.0) {
     scaleMode = 'macro';
     scaleLabel = `Wide Basin Scale (${widthKm.toFixed(1)} km × ${heightKm.toFixed(1)} km · ~${metersPerPixel} m/px)`;
     scaleAdvice =
-      'Wide area (>5 km): small features (weed edges, shadows, cover) cannot be resolved reliably; only macro points, channels & drop-offs are evaluated. Zoom to 0.4–1.5 km for full 12-feature extraction.';
-  } else if (maxSpanKm > 1.5) {
+      'Wide area (>5 km): small features (weed edges, shadows, cover) cannot be resolved reliably; only macro points, channels & drop-offs are evaluated. Optimize area for full 12-feature extraction.';
+  } else if (maxSpanKm > 1.8) {
     scaleMode = 'meso';
     scaleLabel = `Sector Scale (${widthKm.toFixed(1)} km × ${heightKm.toFixed(1)} km · ~${metersPerPixel} m/px)`;
     scaleAdvice =
-      'Sector overview (1.5–5 km): strong for points, bays & channels; zoom closer (0.4–1.5 km) for finer weed edges, cover & shadows.';
+      'Sector overview (1.8–5 km): strong for points, bays & channels; optimize area for finer weed edges, cover & shadows.';
   }
 
   return {
@@ -210,5 +267,6 @@ export function computeSelectionScale(bbox: BoundingBox): {
     isOverZoomed,
     isOptimalScale,
     scaleAdvice,
+    smartScale,
   };
 }

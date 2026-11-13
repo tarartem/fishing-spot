@@ -43,12 +43,17 @@ function latToTileYFloat(lat: number, z: number): number {
   );
 }
 
-function buildSatelliteTileUrl(
-  source: SatelliteSource,
+export type CaptureImagerySource = SatelliteSource | 'terrain';
+
+function buildTileUrl(
+  source: CaptureImagerySource,
   z: number,
   x: number,
   y: number
 ): string {
+  if (source === 'terrain') {
+    return `https://tile.opentopomap.org/${z}/${x}/${y}.png`;
+  }
   if (source === 'pnoa') {
     const tmsY = Math.pow(2, z) - 1 - y;
     return `https://tms-pnoa-ma.idee.es/1.0.0/pnoa-ma/${z}/${x}/${tmsY}.jpeg`;
@@ -79,20 +84,20 @@ function loadCorsImage(url: string, timeoutMs = 1200): Promise<HTMLImageElement 
 }
 
 /**
- * Stitches CORS-enabled satellite XYZ/TMS tiles directly onto a 1024x1024 canvas
- * strictly bounded to `bbox`. Works even when the user is browsing in Terrain mode!
+ * Stitches CORS-enabled satellite or terrain XYZ/TMS tiles directly onto a 1024x1024 canvas
+ * strictly bounded to `bbox`. Works across PNOA, Esri, and OpenTopoMap Terrain!
  */
-async function stitchSatelliteTilesForBbox(
+async function stitchTilesForBbox(
   ctx: CanvasRenderingContext2D,
   targetSize: number,
   bbox: BoundingBox,
-  satelliteSource: SatelliteSource
+  imagerySource: CaptureImagerySource
 ): Promise<boolean> {
   const [minLng, minLat, maxLng, maxLat] = bbox;
   const lngSpan = Math.max(1e-5, maxLng - minLng);
   // Target >= 4 native tiles across 1024px (256px * 4 = 1024px) without blurring
   const idealZoom = Math.ceil(Math.log2((360 / lngSpan) * 4));
-  const maxSourceZoom = satelliteSource === 'pnoa' ? 18 : 17;
+  const maxSourceZoom = imagerySource === 'pnoa' ? 18 : 17;
   const z = Math.max(12, Math.min(maxSourceZoom, idealZoom));
   const maxTileIdx = Math.pow(2, z) - 1;
 
@@ -116,7 +121,7 @@ async function stitchSatelliteTilesForBbox(
 
   for (let tx = xStart; tx <= xEnd; tx++) {
     for (let ty = yStart; ty <= yEnd; ty++) {
-      const url = buildSatelliteTileUrl(satelliteSource, z, tx, ty);
+      const url = buildTileUrl(imagerySource, z, tx, ty);
       tileJobs.push(loadCorsImage(url).then((img) => ({ tx, ty, img })));
     }
   }
@@ -166,9 +171,9 @@ function inspectCanvasForGlare(
 }
 
 /**
- * Captures the selected area as a 1024x1024 SATELLITE PNG data URL.
- * Even when the user is browsing in Terrain mode, this stitches Satellite tiles
- * (IGN PNOA or Esri) for `bbox`, falling back to WebGL canvas or offline rendering.
+ * Captures the selected area as a 1024x1024 PNG data URL.
+ * Stitches aerial satellite tiles (IGN PNOA / Esri) or OpenTopoMap Terrain tiles for `bbox`,
+ * falling back to WebGL canvas or offline rendering.
  */
 export async function captureMapAreaScreenshot(params: {
   sourceCanvas?: HTMLCanvasElement | null;
@@ -176,6 +181,7 @@ export async function captureMapAreaScreenshot(params: {
   bbox: BoundingBox;
   mapStyle: MapStyleMode;
   satelliteSource?: SatelliteSource;
+  imagerySource?: CaptureImagerySource;
   waterBodyLabel?: string;
 }): Promise<CapturedScreenshotResult> {
   const targetSize = 1024;
@@ -187,9 +193,13 @@ export async function captureMapAreaScreenshot(params: {
     return { dataUrl: '', glareDetected: false, capturedVia: 'offline_fallback' };
   }
 
-  const satSource = params.satelliteSource ?? 'pnoa';
+  const effectiveImagery: CaptureImagerySource =
+    params.imagerySource ??
+    (params.mapStyle === 'terrain'
+      ? 'terrain'
+      : (params.satelliteSource ?? 'pnoa'));
 
-  // 1. Fetch client raster water mask in parallel with stitching Satellite tiles for `bbox`.
+  // 1. Fetch client raster water mask in parallel with stitching tiles for `bbox`.
   let capturedVia: CapturedScreenshotResult['capturedVia'] = 'offline_fallback';
   const waterMaskPromise =
     typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.onLine !== false
@@ -198,11 +208,11 @@ export async function captureMapAreaScreenshot(params: {
 
   if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.onLine !== false) {
     try {
-      const stitched = await stitchSatelliteTilesForBbox(
+      const stitched = await stitchTilesForBbox(
         ctx,
         targetSize,
         params.bbox,
-        satSource
+        effectiveImagery
       );
       if (stitched) {
         capturedVia = 'tile_stitch';

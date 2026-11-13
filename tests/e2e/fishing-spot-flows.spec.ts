@@ -53,7 +53,7 @@ test.describe('Fishing Spot — Spain MVP Screenshot-to-Grid Artifact E2E Flow',
     // 6. Verify 1-page PDF report download button & English-only UI outside restrictions
     await expect(page.locator('header')).not.toContainText('España');
     await expect(page.locator('header')).toContainText(
-      'Locate exact fishing spots with satellite AI'
+      'Find top fishing spots using satellite & terrain data'
     );
 
     // Verify Header GPS link, Copy button, and New Analysis CTA
@@ -73,9 +73,9 @@ test.describe('Fishing Spot — Spain MVP Screenshot-to-Grid Artifact E2E Flow',
     ]);
     expect(pdfDownload.suggestedFilename()).toMatch(/fishing-spot-.*\.pdf$/);
 
-    // 7. Screenshot is saved as user's artifact
-    await expect(page.getByTestId('my-artifacts-list')).toContainText(
-      'Saved (1)'
+    // 7. Screenshot is saved as user's artifact under My spots
+    await expect(page.getByTestId('my-spots-dropdown-button')).toContainText(
+      'My spots (1)'
     );
   });
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FishingMap } from '@/modules/map-grid/components/FishingMap';
 import {
   AnalysisProgressDialog,
@@ -9,6 +9,7 @@ import {
 import {
   captureMapAreaScreenshot,
   renderAnnotatedGridScreenshot,
+  type CaptureImagerySource,
   type CropBoxPixels,
 } from '@/modules/map-grid/screenshot-compositor';
 import {
@@ -25,6 +26,7 @@ import { parseGpsCoordinates } from '@/shared/utils/gps-coordinates';
 import {
   ANGLER_FEATURE_CATALOG,
   computeSelectionScale,
+  getOptimalBbox,
 } from '@/modules/ai-advisor/scale-utils';
 import type {
   BoundingBox,
@@ -122,12 +124,58 @@ export default function HomePage() {
   const anglerGearNote: string | undefined = undefined;
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
 
-  // Active Artifact & Saved Artifacts Gallery
+  // Active Artifact & Saved Artifacts Gallery + My Spots Dropdown
   const [currentArtifact, setCurrentArtifact] =
     useState<UserScreenshotArtifact | null>(null);
   const [savedArtifacts, setSavedArtifacts] = useState<
     UserScreenshotArtifact[]
   >([]);
+  const [isMySpotsOpen, setIsMySpotsOpen] = useState<boolean>(false);
+  const mySpotsRef = useRef<HTMLDivElement | null>(null);
+  const [previewImagery, setPreviewImagery] =
+    useState<CaptureImagerySource>('pnoa');
+  const [originalBboxBeforeOptimization, setOriginalBboxBeforeOptimization] =
+    useState<BoundingBox | null>(null);
+
+  // Close My Spots dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (mySpotsRef.current && !mySpotsRef.current.contains(e.target as Node)) {
+        setIsMySpotsOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMySpotsOpen(false);
+      }
+    };
+    if (isMySpotsOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMySpotsOpen]);
+
+  const formatRelativeTime = (isoString?: string): string => {
+    if (!isoString) return 'Recent';
+    const timestamp = new Date(isoString).getTime();
+    if (isNaN(timestamp)) return 'Recent';
+    const diffSec = Math.floor((Date.now() - timestamp) / 1000);
+    if (diffSec < 60) return 'Just now';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return new Date(timestamp).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+    });
+  };
 
   // Load curated Spain water bodies in background for fast local recognition
   useEffect(() => {
@@ -204,7 +252,21 @@ export default function HomePage() {
     }
   };
 
-  // Step 1: User selects the area on the map -> always captures Satellite screenshot -> sees screenshot on screen
+  const selectionCenterLng = (selectedBbox[0] + selectedBbox[2]) / 2;
+  const selectionCenterLat = (selectedBbox[1] + selectedBbox[3]) / 2;
+  const nearestPin = waterBodyPins.find(
+    (p) =>
+      Math.hypot(
+        p.centerLng - selectionCenterLng,
+        p.centerLat - selectionCenterLat
+      ) < 0.25
+  );
+  const effectiveWaterBodyLabel =
+    activeWaterBody?.name ||
+    nearestPin?.name ||
+    (flyToTarget?.label ? flyToTarget.label.split(',')[0].trim() : undefined);
+
+  // Step 1: User selects the area on the map -> captures screenshot -> sees preview on screen
   const handleCaptureArea = async (params: {
     canvas: HTMLCanvasElement | null;
     cropBox: CropBoxPixels | null;
@@ -212,13 +274,31 @@ export default function HomePage() {
     waterBodyHint?: WaterBodyPinSummary | null;
   }) => {
     setSelectedBbox(params.bbox);
+    setOriginalBboxBeforeOptimization(null);
+    const initialImagery: CaptureImagerySource =
+      mapStyle === 'terrain' ? 'terrain' : satelliteSource;
+    setPreviewImagery(initialImagery);
+
+    const cLng = (params.bbox[0] + params.bbox[2]) / 2;
+    const cLat = (params.bbox[1] + params.bbox[3]) / 2;
+    const localPin = waterBodyPins.find(
+      (p) => Math.hypot(p.centerLng - cLng, p.centerLat - cLat) < 0.25
+    );
+    const wbLabel =
+      params.waterBodyHint?.name ||
+      activeWaterBody?.name ||
+      localPin?.name ||
+      (flyToTarget?.label ? flyToTarget.label.split(',')[0].trim() : undefined);
+
     const captured = await captureMapAreaScreenshot({
       sourceCanvas: params.canvas,
       cropBox: params.cropBox,
       bbox: params.bbox,
-      mapStyle,
-      satelliteSource,
-      waterBodyLabel: params.waterBodyHint?.name,
+      mapStyle: initialImagery === 'terrain' ? 'terrain' : 'satellite',
+      satelliteSource:
+        initialImagery === 'terrain' ? satelliteSource : initialImagery,
+      imagerySource: initialImagery,
+      waterBodyLabel: wbLabel,
     });
     const griddedUrl = await renderAnnotatedGridScreenshot({
       rawScreenshotDataUrl: captured.dataUrl,
@@ -230,13 +310,67 @@ export default function HomePage() {
     setWorkflowStep('screenshot_preview');
   };
 
-  const handleSwitchPreviewSatelliteSource = async (nextSource: SatelliteSource) => {
-    setSatelliteSource(nextSource);
+  const handleSwitchPreviewImagery = async (
+    nextImagery: CaptureImagerySource
+  ) => {
+    setPreviewImagery(nextImagery);
+    if (nextImagery !== 'terrain') {
+      setSatelliteSource(nextImagery);
+    }
     const captured = await captureMapAreaScreenshot({
       bbox: selectedBbox,
-      mapStyle: 'satellite',
-      satelliteSource: nextSource,
-      waterBodyLabel: activeWaterBody?.name,
+      mapStyle: nextImagery === 'terrain' ? 'terrain' : 'satellite',
+      satelliteSource:
+        nextImagery === 'terrain' ? satelliteSource : nextImagery,
+      imagerySource: nextImagery,
+      waterBodyLabel: effectiveWaterBodyLabel,
+    });
+    const griddedUrl = await renderAnnotatedGridScreenshot({
+      rawScreenshotDataUrl: captured.dataUrl,
+    });
+    setGlareDetected(captured.glareDetected);
+    setCapturedWaterMask(captured.waterMask ?? null);
+    setRawScreenshotUrl(captured.dataUrl);
+    setGriddedPreviewUrl(griddedUrl);
+  };
+
+  const handleOptimizeArea = async () => {
+    setOriginalBboxBeforeOptimization(selectedBbox);
+    const optBbox = getOptimalBbox(selectedBbox, 1.0);
+    setSelectedBbox(optBbox);
+    const captured = await captureMapAreaScreenshot({
+      bbox: optBbox,
+      mapStyle: previewImagery === 'terrain' ? 'terrain' : 'satellite',
+      satelliteSource:
+        previewImagery === 'terrain'
+          ? satelliteSource
+          : (previewImagery as SatelliteSource),
+      imagerySource: previewImagery,
+      waterBodyLabel: effectiveWaterBodyLabel,
+    });
+    const griddedUrl = await renderAnnotatedGridScreenshot({
+      rawScreenshotDataUrl: captured.dataUrl,
+    });
+    setGlareDetected(captured.glareDetected);
+    setCapturedWaterMask(captured.waterMask ?? null);
+    setRawScreenshotUrl(captured.dataUrl);
+    setGriddedPreviewUrl(griddedUrl);
+  };
+
+  const handleRevertArea = async () => {
+    if (!originalBboxBeforeOptimization) return;
+    const prev = originalBboxBeforeOptimization;
+    setOriginalBboxBeforeOptimization(null);
+    setSelectedBbox(prev);
+    const captured = await captureMapAreaScreenshot({
+      bbox: prev,
+      mapStyle: previewImagery === 'terrain' ? 'terrain' : 'satellite',
+      satelliteSource:
+        previewImagery === 'terrain'
+          ? satelliteSource
+          : (previewImagery as SatelliteSource),
+      imagerySource: previewImagery,
+      waterBodyLabel: effectiveWaterBodyLabel,
     });
     const griddedUrl = await renderAnnotatedGridScreenshot({
       rawScreenshotDataUrl: captured.dataUrl,
@@ -382,7 +516,7 @@ export default function HomePage() {
               Fishing Spot · Spain
             </h1>
             <p className="text-[11px] text-slate-400">
-              Locate exact fishing spots with satellite AI, terrain &amp; regulations
+              Find top fishing spots using satellite &amp; terrain data
             </p>
           </div>
         </div>
@@ -408,35 +542,68 @@ export default function HomePage() {
           </button>
         </form>
 
-        {/* Saved User Artifacts Switcher */}
-        <div className="flex items-center gap-2">
-          {savedArtifacts.length > 0 && (
+        {/* Saved User Reports: My Spots Dropdown */}
+        <div ref={mySpotsRef} className="relative flex items-center gap-2">
+          <button
+            type="button"
+            data-testid="my-spots-dropdown-button"
+            onClick={() => setIsMySpotsOpen((prev) => !prev)}
+            className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-950/40 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-900/50 transition"
+          >
+            <span>📍</span>
+            <span>My spots ({savedArtifacts.length})</span>
+            <span className="text-[10px] text-emerald-400/80">{isMySpotsOpen ? '▲' : '▼'}</span>
+          </button>
+
+          {isMySpotsOpen && (
             <div
-              data-testid="my-artifacts-list"
-              className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-950/50 px-2.5 py-1 text-xs"
+              data-testid="my-spots-dropdown-menu"
+              className="absolute top-full right-0 mt-2 w-80 rounded-2xl border border-slate-800 bg-slate-900/95 p-2.5 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
             >
-              <span className="font-bold text-emerald-300">
-                🗂️ Saved ({savedArtifacts.length}):
-              </span>
-              {savedArtifacts.slice(0, 3).map((art, idx) => (
-                <button
-                  key={art.id}
-                  type="button"
-                  data-testid={`saved-artifact-chip-${idx}`}
-                  onClick={() => {
-                    setCurrentArtifact(art);
-                    setWorkflowStep('artifact_ready');
-                  }}
-                  className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold transition ${
-                    currentArtifact?.id === art.id &&
-                    workflowStep === 'artifact_ready'
-                      ? 'bg-emerald-400 text-slate-950'
-                      : 'bg-slate-900 text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  {art.analysis.water_body_name.split('(')[0].trim()}
-                </button>
-              ))}
+              <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-800/80 mb-1">
+                <span className="text-xs font-bold text-white">Previous Reports</span>
+                <span className="text-[10px] font-mono text-emerald-400 bg-slate-800 px-2 py-0.5 rounded-md">
+                  {savedArtifacts.length}
+                </span>
+              </div>
+
+              {savedArtifacts.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400">
+                  No saved fishing spots yet. Select an area on the map to run your first report.
+                </div>
+              ) : (
+                <div data-testid="my-artifacts-list" className="max-h-72 overflow-y-auto space-y-1 pr-0.5">
+                  {savedArtifacts.map((art, idx) => (
+                    <button
+                      key={art.id}
+                      type="button"
+                      data-testid={`saved-artifact-chip-${idx}`}
+                      onClick={() => {
+                        setCurrentArtifact(art);
+                        setWorkflowStep('artifact_ready');
+                        setIsMySpotsOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition group ${
+                        currentArtifact?.id === art.id && workflowStep === 'artifact_ready'
+                          ? 'bg-emerald-500/20 border border-emerald-500/40'
+                          : 'hover:bg-slate-800/80'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1 mr-2">
+                        <div className="text-xs font-bold text-white group-hover:text-emerald-300 truncate">
+                          {art.analysis.water_body_name.split('(')[0].trim()}
+                        </div>
+                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                          <span>🎣 {art.analysis.recommended_spots.length} spots</span>
+                          <span>·</span>
+                          <span>{formatRelativeTime(art.createdAt || art.analysis.generated_at)}</span>
+                        </div>
+                      </div>
+                      <span className="text-xs text-slate-500 group-hover:text-emerald-300">→</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -470,64 +637,109 @@ export default function HomePage() {
                   data-testid="satellite-capture-badge"
                   className="text-[11px] font-medium text-slate-400"
                 >
-                  🛰️ Satellite · {satelliteSource === 'pnoa' ? 'IGN PNOA HD' : 'Esri World'}
-                  {mapStyle === 'terrain' ? ' (Auto-switched from Terrain)' : ''}
+                  {previewImagery === 'terrain'
+                    ? '⛰️ Terrain · OpenTopoMap'
+                    : `🛰️ Satellite · ${previewImagery === 'pnoa' ? 'IGN PNOA HD' : 'Esri World'}`}
                 </span>
               </div>
 
-              {/* Clear Segmented Imagery Selector */}
-              <div className="inline-flex items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-950/80 p-1">
+              {/* Segmented Imagery Selector: PNOA HD | Esri World | Terrain */}
+              <div
+                data-testid="preview-imagery-selector"
+                className="inline-flex items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-950/80 p-1"
+              >
                 <span className="px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                   Imagery:
                 </span>
-                <button
-                  type="button"
-                  onClick={() => handleSwitchPreviewSatelliteSource('pnoa')}
-                  className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
-                    satelliteSource === 'pnoa'
-                      ? 'bg-sky-400 text-slate-950 shadow'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
-                  IGN PNOA HD
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSwitchPreviewSatelliteSource('esri')}
-                  className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
-                    satelliteSource === 'esri'
-                      ? 'bg-sky-400 text-slate-950 shadow'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
-                  Esri World
-                </button>
+                {(
+                  [
+                    { id: 'pnoa', label: '🛰️ PNOA HD' },
+                    { id: 'esri', label: '🌍 Esri Alt' },
+                    { id: 'terrain', label: '⛰️ Terrain' },
+                  ] as const
+                ).map((src) => (
+                  <button
+                    key={src.id}
+                    type="button"
+                    data-testid={`preview-imagery-${src.id}`}
+                    onClick={() => handleSwitchPreviewImagery(src.id)}
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                      previewImagery === src.id
+                        ? 'bg-sky-400 text-slate-950 shadow'
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    }`}
+                  >
+                    {src.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Concise Area Span & Scale Evaluation */}
+            {/* Smart Scale Classification & 1-Click Optimize Area */}
             <div
               data-testid="selection-scale-banner"
-              className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3.5 py-2 text-xs ${
-                previewScale.scaleMode === 'macro' || previewScale.isOverZoomed
-                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
-                  : 'border-slate-800 bg-slate-950/60 text-slate-200'
+              className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-xs ${
+                previewScale.smartScale.tier === 'optimal'
+                  ? 'border-emerald-500/40 bg-emerald-950/30 text-emerald-200'
+                  : previewScale.smartScale.tier === 'too_tight'
+                  ? 'border-amber-500/40 bg-amber-950/30 text-amber-200'
+                  : 'border-orange-500/40 bg-orange-950/30 text-orange-200'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-semibold text-emerald-400">
-                  📐 {previewScale.widthKm.toFixed(1)} × {previewScale.heightKm.toFixed(1)} km (~{previewScale.metersPerPixel} m/px)
+              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                <span
+                  data-testid="scale-tier-badge"
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-bold ${
+                    previewScale.smartScale.tier === 'optimal'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : previewScale.smartScale.tier === 'too_tight'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                      : 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
+                  }`}
+                >
+                  <span>
+                    {previewScale.smartScale.tier === 'optimal'
+                      ? '🟢'
+                      : previewScale.smartScale.tier === 'too_tight'
+                      ? '🟡'
+                      : '🟠'}
+                  </span>
+                  <span>{previewScale.smartScale.badgeLabel}</span>
                 </span>
-                <span className="text-slate-400">·</span>
                 <span className="text-[11px] text-slate-300">
-                  {previewScale.scaleAdvice}
+                  {previewScale.smartScale.explanation}
                 </span>
               </div>
-              {glareDetected && (
-                <span className="text-[11px] font-medium text-amber-300">
-                  ☀️ Surface glare detected — try switching imagery
-                </span>
-              )}
+
+              <div className="flex items-center gap-2">
+                {previewScale.smartScale.canOptimize && !originalBboxBeforeOptimization && (
+                  <button
+                    type="button"
+                    data-testid="optimize-area-button"
+                    onClick={handleOptimizeArea}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1 text-xs font-bold text-slate-950 shadow hover:bg-emerald-400 transition"
+                  >
+                    <span>✨</span>
+                    <span>Optimize Area</span>
+                  </button>
+                )}
+                {originalBboxBeforeOptimization && (
+                  <button
+                    type="button"
+                    data-testid="revert-area-button"
+                    onClick={handleRevertArea}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-1 text-xs font-bold text-slate-200 hover:bg-slate-700 transition"
+                  >
+                    <span>↩️</span>
+                    <span>Revert</span>
+                  </button>
+                )}
+                {glareDetected && (
+                  <span className="text-[11px] font-medium text-amber-300">
+                    ☀️ Glare detected
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Low/No Surface Water Warning before running analysis */}
@@ -1089,7 +1301,7 @@ export default function HomePage() {
       {/* Preparation State Stepper (Angler Wisdom & Hydrographic Intelligence) */}
       <AnalysisProgressDialog
         isOpen={isAnalyzing}
-        waterBodyLabel={activeWaterBody?.name}
+        waterBodyLabel={effectiveWaterBodyLabel}
       />
     </main>
   );

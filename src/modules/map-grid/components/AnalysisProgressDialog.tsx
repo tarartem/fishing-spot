@@ -82,6 +82,9 @@ export function AnalysisProgressDialog({
     Math.round(((activeStepIndex + 1) / ANALYSIS_STEPS.length) * 100)
   );
 
+  const cleanName = waterBodyLabel?.split('(')[0].trim();
+  const headerTitle = cleanName ? `Analyzing ${cleanName}` : 'Analyzing Selected Basin';
+
   return (
     <div
       role="dialog"
@@ -92,33 +95,33 @@ export function AnalysisProgressDialog({
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/95 p-6 shadow-2xl space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-          <div>
-            <h3 className="text-sm font-bold text-white tracking-wide">
-              Analyzing Location
+          <div className="min-w-0 flex-1 mr-3">
+            <h3 className="text-sm font-bold text-white tracking-wide truncate">
+              {headerTitle}
             </h3>
             <p className="text-[11px] text-slate-400">
-              {waterBodyLabel || 'Hydrographic & Angler Intelligence'}
+              Hydrographic &amp; Angler Intelligence
             </p>
           </div>
-          <span className="rounded-md bg-slate-800 px-2 py-0.5 font-mono text-[11px] font-semibold text-emerald-400">
+          <span className="shrink-0 rounded-md bg-slate-800 px-2 py-0.5 font-mono text-[11px] font-semibold text-emerald-400">
             {activeStepIndex + 1} / {ANALYSIS_STEPS.length}
           </span>
         </div>
 
-        {/* Single Active Feature Spotlight */}
+        {/* Single Active Feature Spotlight (Fixed Height to Prevent Vertical Jitter) */}
         <div
           key={activeStepIndex}
-          className="min-h-[88px] rounded-xl border border-slate-800 bg-slate-950/70 p-4 flex items-start gap-3.5 animate-in fade-in duration-300"
+          className="h-[96px] rounded-xl border border-slate-800 bg-slate-950/70 p-4 flex items-center gap-3.5 overflow-hidden"
         >
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-base">
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-base">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-lg bg-emerald-400/15 opacity-75" />
             <span>{currentStep.icon}</span>
           </div>
-          <div className="space-y-1">
+          <div className="flex-1 min-w-0 space-y-0.5">
             <div className="text-xs font-semibold text-emerald-300">
               {currentStep.title}
             </div>
-            <div className="text-xs leading-relaxed text-slate-300">
+            <div className="text-xs leading-relaxed text-slate-300 line-clamp-2 min-h-[2.5rem] flex items-center">
               {currentStep.detail}
             </div>
           </div>

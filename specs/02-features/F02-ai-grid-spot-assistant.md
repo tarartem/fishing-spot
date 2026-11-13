@@ -77,13 +77,23 @@
 
 6. **Professional Minimalist Report UI & 1-Page PDF Export — Tactical Angler (Verhunt Field Edition)**:
    - **Main Screen Brand Identity & Angler First Impression**:
-     - Main top header title is **FISHING SPOT** with a high-vis Caldero rust `Fish` vector badge and clear tactical subtitle: *"TACTICAL RECON · HYDROGRAPHIC SPOT FINDER"*.
-     - Header includes quick tactical angler status pills with Lucide vector icons (`Waves`, `Fish`, `Compass` — zero raw Unicode emojis): `[ Shore & Boat Recon ]`, `[ Multi-Species ]`.
+     - Main top header title is **FISHING SPOT** with a high-vis Caldero rust `Fish` vector badge and clean subtitle: *"Find top fishing spots using satellite & terrain data"*.
+     - Redundant non-interactive mode pills (`Shore & Boat`, `Multi-Species`) and the `· Tactical Recon` suffix are removed from the header to keep the interface uncluttered and focused on search.
      - Global search input allows finding any lake, river, town, or direct GPS coordinates worldwide.
      - Header includes the **"My spots (N) ▾"** dropdown button (with Lucide `Bookmark` vector icon), displaying saved reports and revealing previous water analyses with hotspot counts and relative timestamps.
    - **Map Landing & Selection Preview (Verhunt Field Edition)**:
-     - Concise reticle hint (`Frame your fishing area · Aim at bays, points & weed edges`) with tactical corner brackets (`┌ ┐ / └ ┘`) in heavy anodized olive (`#2c3a2f`) and single floating primary Verhunt Caldero CTA `SCAN FISHING WATERS` (with Lucide `Crosshair` or `Scan` icon, `#d96b27` blaze rust styling) without surrounding dark wrapper box.
-     - Streamlined Selection Preview modal: segmented imagery selector (`PNOA HD` | `Esri World` | `Terrain` with Lucide `Satellite`, `Layers`, `Mountain` icons), smart scale classification (`Optimal` / `Too tight` / `Wide area`), fixed ~35m casting arc reference scale, and 1-click `Optimize Area` (Lucide `Sparkles`) + `Revert` (Lucide `Undo2`) controls.
+     - Viewfinder reticle features clean Caldero rust corner brackets (`┌ ┐ / └ ┘`) and center crosshairs with structure hint (`Aim at bays, points & weed edges`), omitting redundant text labels.
+     - Floating primary Verhunt Caldero CTA `SCAN FISHING WATERS` (with Lucide `Crosshair` or `Scan` icon, `#d96b27` blaze rust styling) without surrounding dark wrapper box.
+     - Selection Preview modal: segmented imagery selector (`PNOA HD` | `Esri World` | `Terrain`), stable smart scale classification (`Optimal` / `Too tight` / `Wide area` with `shrink-0 whitespace-nowrap` to prevent layout resizing), removed static casting arc pill, and 1-click `Optimize Area` (Lucide `Sparkles`) + `Revert` (Lucide `Undo2`) controls.
+   - **Artifact Dossier UI Report (Angler Focus)**:
+     - Vector Iconography: Uses Lucide `Fish` icon for "Where to Fish on the Grid", spot card target species badges, and "Analyze Another Location" button, replacing target/crosshair icons.
+     - Non-resizing metadata labels: "Access & Road Surface:" and "Structure:" labels use flex layout with `shrink-0 whitespace-nowrap` so they never resize, wrap awkwardly, or cause layout shifts.
+   - **1-Page PDF Export (Verhunt Field Edition Palette)**:
+     - Header band in Deep Olive (`rgb(21, 28, 22)`) with a 1mm Verhunt Caldero Rust (`rgb(217, 107, 39)`) accent underline strip, Warm Sand Fleece Khaki title, and Muted Stone metadata.
+     - Screenshot framed in Ripstop Seam (`rgb(44, 58, 47)`).
+     - Geography and Regulations callouts styled with tactical muted field olive and Caldero accents.
+     - Spot cards: Top Recommended Spots (#1–#3) highlighted with Caldero Rust indicator strips and subtle warm field backgrounds; Secondary Spots (#4–#6) styled with Structure Green indicator strips.
+     - Best Game Plan callout styled with Structure Green border and Caldero header.
    - **Preparation State (Single-Feature Sequential Stepper)**: While analysis runs, a dedicated dialog demonstrates **1 concise capability at a time** across all 6 checkpoints sequentially in authentic field guide scouting language:
      - 1: `Scanning water boundary & permanent reservoir contours...`
      - 2: `Overlaying 100m tactical casting grid & bathymetry sectors...`

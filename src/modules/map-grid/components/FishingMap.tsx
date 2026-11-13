@@ -297,18 +297,13 @@ export function FishingMap({
         <div
           ref={reticleRef}
           data-testid="target-reticle-box"
-          className="relative h-[64vh] w-[64vh] max-w-[85vw] max-h-[65vw] rounded-lg border border-[#688a5b]/25 shadow-[0_0_0_9999px_rgba(10,15,11,0.40)] flex flex-col justify-between p-3"
+          className="relative h-[64vh] w-[64vh] max-w-[85vw] max-h-[65vw] rounded-lg border border-[#688a5b]/25 shadow-[0_0_0_9999px_rgba(10,15,11,0.40)] flex flex-col justify-end p-3"
         >
           {/* Tactical Viewfinder Corner Brackets in Verhunt Caldero Rust */}
           <span className="absolute top-0 left-0 h-4 w-4 border-t-2 border-l-2 border-[#d96b27] rounded-tl-sm" />
           <span className="absolute top-0 right-0 h-4 w-4 border-t-2 border-r-2 border-[#d96b27] rounded-tr-sm" />
           <span className="absolute bottom-0 left-0 h-4 w-4 border-b-2 border-l-2 border-[#d96b27] rounded-bl-sm" />
           <span className="absolute bottom-0 right-0 h-4 w-4 border-b-2 border-r-2 border-[#d96b27] rounded-br-sm" />
-
-          {/* Top Inscription: Tactical Hydro-Scan Reticle */}
-          <div className="text-[10px] font-mono tracking-wider uppercase text-[#dfd7c8]/90 bg-[#151c16]/90 border border-[#2c3a2f] px-2.5 py-0.5 rounded self-center text-center shadow-lg backdrop-blur-sm">
-            HYDRO-SCAN RETICLE · 100M GRID
-          </div>
 
           {/* Center Crosshair Tick Marker */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

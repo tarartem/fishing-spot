@@ -543,21 +543,9 @@ export default function HomePage() {
               FISHING SPOT
             </h1>
             <p className="text-[10px] font-mono tracking-wider uppercase text-[#918b80]">
-              Find top fishing spots using satellite &amp; terrain data · Tactical Recon
+              Find top fishing spots using satellite &amp; terrain data
             </p>
           </div>
-        </div>
-
-        {/* Tactical Angler Mode Indicators (Shore/Boat & Multi-Species) */}
-        <div className="hidden xl:flex items-center gap-1.5 text-[11px] font-mono border-l border-[#2c3a2f] pl-3">
-          <span className="flex items-center gap-1 rounded border border-[#2c3a2f] bg-[#1c251e] px-2 py-0.5 text-[#dfd7c8]">
-            <Waves className="h-3 w-3 text-[#688a5b]" />
-            <span>Shore &amp; Boat</span>
-          </span>
-          <span className="flex items-center gap-1 rounded border border-[#2c3a2f] bg-[#1c251e] px-2 py-0.5 text-[#dfd7c8]">
-            <Fish className="h-3 w-3 text-[#d96b27]" />
-            <span>Multi-Species</span>
-          </span>
         </div>
 
         {/* Search Bar to Navigate to Any Water Body or GPS Coordinates */}
@@ -750,7 +738,7 @@ export default function HomePage() {
               <div className="flex items-center gap-2.5 flex-1 min-w-0">
                 <span
                   data-testid="scale-tier-badge"
-                  className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-bold ${
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-bold shrink-0 whitespace-nowrap ${
                     previewScale.smartScale.tier === 'optimal'
                       ? 'bg-[#688a5b]/20 text-[#688a5b] border border-[#688a5b]/40'
                       : previewScale.smartScale.tier === 'too_tight'
@@ -759,7 +747,7 @@ export default function HomePage() {
                   }`}
                 >
                   <span
-                    className={`h-1.5 w-1.5 rounded-full ${
+                    className={`h-1.5 w-1.5 rounded-full shrink-0 ${
                       previewScale.smartScale.tier === 'optimal'
                         ? 'bg-[#688a5b]'
                         : previewScale.smartScale.tier === 'too_tight'
@@ -769,12 +757,8 @@ export default function HomePage() {
                   />
                   <span>{previewScale.smartScale.badgeLabel}</span>
                 </span>
-                <span className="text-[11px] text-[#dfd7c8]/90">
+                <span className="text-[11px] text-[#dfd7c8]/90 truncate">
                   {previewScale.smartScale.explanation}
-                </span>
-                <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[10px] text-[#918b80] bg-[#0e130f] px-2 py-0.5 rounded border border-[#2c3a2f]">
-                  <Crosshair className="h-3 w-3 text-[#d96b27]" />
-                  <span>100m Grid · ~35m Cast Arc</span>
                 </span>
               </div>
 
@@ -975,7 +959,7 @@ export default function HomePage() {
                     </>
                   ) : (
                     <>
-                      <Crosshair className="h-3.5 w-3.5" />
+                      <Fish className="h-3.5 w-3.5" />
                       <span>Analyze Another Location</span>
                     </>
                   )}
@@ -1170,7 +1154,7 @@ export default function HomePage() {
                 <div data-testid="where-to-fish-summary" className="space-y-3.5">
                   <div className="flex items-center justify-between border-b border-[#2c3a2f]/80 pb-2">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-[#dfd7c8] flex items-center gap-1.5">
-                      <Crosshair className="h-4 w-4 text-[#d96b27]" />
+                      <Fish className="h-4 w-4 text-[#d96b27]" />
                       <span>Where to Fish on the Grid:</span>
                     </h3>
                     <span className="text-xs text-[#918b80] font-mono">
@@ -1236,6 +1220,7 @@ export default function HomePage() {
                             <div className="flex items-center gap-2 text-[11px]">
                               {spot.target_species && spot.target_species.length > 0 && (
                                 <span className="inline-flex items-center gap-1 rounded-md border border-[#688a5b]/40 bg-[#1c251e] px-2 py-0.5 font-medium text-[#dfd7c8]">
+                                  <Fish className="h-3 w-3 text-[#688a5b] shrink-0" />
                                   <span className="text-[#918b80]">Target:</span>{' '}
                                   {spot.target_species.join(', ')}
                                 </span>
@@ -1273,21 +1258,21 @@ export default function HomePage() {
                           {/* Compact Structure & Access details */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-[#918b80] border-t border-[#2c3a2f]/50 pt-2">
                             {spot.depth_structure && (
-                              <div className="flex items-center gap-1">
-                                <strong className="text-[#dfd7c8] font-medium">Structure:</strong>
-                                <span>{cleanSpotText(spot.depth_structure)}</span>
+                              <div className="flex items-start gap-1.5 min-w-0">
+                                <strong className="text-[#dfd7c8] font-medium shrink-0 whitespace-nowrap">Structure:</strong>
+                                <span className="flex-1">{cleanSpotText(spot.depth_structure)}</span>
                                 <span
                                   title="Depths inferred from satellite shoreline topography; verify local bank footing on site"
-                                  className="cursor-help text-[#918b80] hover:text-[#dfd7c8]"
+                                  className="cursor-help text-[#918b80] hover:text-[#dfd7c8] shrink-0"
                                 >
                                   ⓘ
                                 </span>
                               </div>
                             )}
                             {cleanAccess && (
-                              <div className="flex items-center gap-1">
-                                <strong className="text-[#dfd7c8] font-medium">Access &amp; Road Surface:</strong>
-                                <span>{cleanAccess}</span>
+                              <div className="flex items-start gap-1.5 min-w-0">
+                                <strong className="text-[#dfd7c8] font-medium shrink-0 whitespace-nowrap">Access &amp; Road Surface:</strong>
+                                <span className="flex-1">{cleanAccess}</span>
                               </div>
                             )}
                           </div>
